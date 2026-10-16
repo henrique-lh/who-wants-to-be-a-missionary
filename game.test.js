@@ -47,6 +47,10 @@ const settle = (state) =>
 const seam = { ...finishDialogue(initialState()), player: { x: 36, y: height - 1 } }
 assert.equal(update(seam, Key.DOWN).player.y, height)
 
+// city houses are solid
+const street = { ...finishDialogue(initialState()), player: { x: 75, y: 12 } }
+assert.deepEqual(update(street, Key.UP).player, street.player)
+
 // closed door blocks and explains
 let state = finishDialogue(initialState())
 const firstDoorX = rowsOf(MapId.JERUSALEM).find((row) => row.includes('@')).search(/[A-Z]/)

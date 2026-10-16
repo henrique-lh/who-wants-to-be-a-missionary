@@ -4,11 +4,15 @@ import { ROWS as JUDEA } from './judea.js'
 
 export const Mode = Object.freeze({ DIALOGUE: 'dialogue', MAP: 'map', PUZZLE: 'puzzle', END: 'end' })
 export const Key = Object.freeze({ UP: 'up', DOWN: 'down', LEFT: 'left', RIGHT: 'right', CONFIRM: 'confirm', CANCEL: 'cancel' })
-export const Tile = Object.freeze({ WALL: '#', TREE: 'T', WATER: '~', GRASS: 'g', SAND: 's', ROCK: 'R', CACTUS: 'X', PATH: '.', EXIT: '>', SPAWN: '@' })
+export const Tile = Object.freeze({ WALL: '#', TREE: 'T', WATER: '~', GRASS: 'g', SAND: 's', ROCK: 'R', CACTUS: 'X', PATH: '.', EXIT: '>', SPAWN: '@',
+  ROOF: 'H', FACADE: 'M', WINDOW: 'N', HOUSE_DOOR: 'D', PAVING: 'P',
+})
 
 // Player position is the tile's top-left corner, in tiles. The hitbox is a square around the tile centre.
 const HITBOX = 0.25
-const SOLID = new Set([Tile.WALL, Tile.TREE, Tile.WATER, Tile.ROCK, Tile.CACTUS])
+const SOLID = new Set([
+  Tile.WALL, Tile.TREE, Tile.WATER, Tile.ROCK, Tile.CACTUS, Tile.ROOF, Tile.FACADE, Tile.WINDOW, Tile.HOUSE_DOOR,
+])
 const STEP = { [Key.UP]: [0, -1], [Key.DOWN]: [0, 1], [Key.LEFT]: [-1, 0], [Key.RIGHT]: [1, 0] }
 const MAPS = [{ id: MapId.JERUSALEM, rows: JERUSALEM, loops: true }, { id: MapId.JUDEA, rows: JUDEA, loops: false }]
 

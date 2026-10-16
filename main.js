@@ -11,6 +11,7 @@ const sheet = (src, columns) => ({ image: Object.assign(new Image(), { src }), c
 const TOWN = sheet('assets/town.png', 12)
 const DESERT = sheet('assets/desert.png', 18)
 const SPRITES = sheet('assets/sprites.png', 9)
+const CITY = sheet('assets/city.png', 4)
 const cell = (from, index) => ({ sheet: from, index })
 const GRASS = cell(TOWN, 0)
 const SAND = cell(DESERT, 64)
@@ -19,13 +20,15 @@ const DOOR = cell(TOWN, 85)
 const EXIT = cell(TOWN, 109)
 const CACTUS = cell(DESERT, 63)
 const ROCK = cell(DESERT, 58)
-// Water has no cells: drawWater paints it so banks and depth follow the pond shape.
+// Water and roofs have no cells: they are painted from their neighbours so shapes join up.
 // Each tile is a stack of cells drawn bottom to top. `npc` is the ground under a character.
 const THEMES = {
   [MapId.JERUSALEM]: {
     [Tile.GRASS]: [GRASS], [Tile.SAND]: [SAND], [Tile.WALL]: [WALL], [Tile.PATH]: [cell(TOWN, 25)],
     [Tile.EXIT]: [EXIT], [Tile.WATER]: [], [Tile.TREE]: [GRASS, cell(TOWN, 28)],
     [Tile.CACTUS]: [SAND, CACTUS], [Tile.ROCK]: [SAND, ROCK], door: [DOOR], npc: [GRASS],
+    [Tile.ROOF]: [], [Tile.FACADE]: [cell(CITY, 11)], [Tile.WINDOW]: [cell(CITY, 3)], [Tile.HOUSE_DOOR]: [cell(CITY, 7)],
+    [Tile.PAVING]: [cell(CITY, 5)],
   },
   [MapId.JUDEA]: {
     [Tile.SAND]: [SAND], [Tile.WALL]: [WALL], [Tile.PATH]: [cell(DESERT, 173)], [Tile.EXIT]: [EXIT],
@@ -114,6 +117,13 @@ function drawWater(map, mapX, mapY, left, top) {
   corners.filter(([diagonal, a, b]) => diagonal && !a && !b).forEach(([, , , [x, y]]) => paint(WATER_BANK, [x, y, 1, 1]))
 }
 
+function roofCell(map, mapX, mapY) {
+  const isRoof = (dx, dy) => tileAt(map, mapX + dx, mapY + dy) === Tile.ROOF
+  const column = !isRoof(-1, 0) ? 0 : !isRoof(1, 0) ? 2 : 1
+  const row = !isRoof(0, -1) ? 0 : !isRoof(0, 1) ? 2 : 1
+  return cell(CITY, row * 4 + column)
+}
+
 function drawCell({ sheet: from, index }, x, y) {
   const column = index % from.columns
   const row = Math.floor(index / from.columns)
@@ -145,6 +155,7 @@ function drawMap({ map, opened, player }) {
       const top = snap((mapY - camY) * TILE)
       tileLayers(theme, map, tile, opened).forEach((layer) => drawCell(layer, left, top))
       if (tile === Tile.WATER) drawWater(map, mapX, mapY, left, top)
+      if (tile === Tile.ROOF) drawCell(roofCell(map, mapX, mapY), left, top)
       if (isNpc(map, tile)) drawCell(cell(SPRITES, NPC_ROW[tile] * SPRITES.columns), left, top)
     }
   }
