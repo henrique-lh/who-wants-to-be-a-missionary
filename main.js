@@ -1,4 +1,4 @@
-import { END_LINES, PuzzleType } from './bible.js'
+import { END_LINES, MapId, PuzzleType } from './bible.js'
 import { Key, Mode, Tile, initialState, isDoor, isNpc, puzzleOf, rowsOf, tileAt, update, visibleItems } from './game.js'
 
 const SCALE = 6
@@ -7,12 +7,26 @@ const TILE = 16
 const VIEW_W = 15
 const VIEW_H = 10
 const LINE = 9
-const COLORS = {
-  [Tile.WALL]: '#555', [Tile.TREE]: '#1b5e20', [Tile.WATER]: '#1565c0', [Tile.GRASS]: '#4caf50',
-  [Tile.SAND]: '#b79c6a', [Tile.ROCK]: '#8d7b68',
-  [Tile.PATH]: '#d7b98a', [Tile.SPAWN]: '#d7b98a', [Tile.EXIT]: '#ffd54f',
+const sheet = (src, columns) => ({ image: Object.assign(new Image(), { src }), columns })
+const TOWN = sheet('assets/town.png', 12)
+const DESERT = sheet('assets/desert.png', 18)
+const SPRITES = sheet('assets/sprites.png', 9)
+const cell = (from, index) => ({ sheet: from, index })
+const WATER = cell(SPRITES, 36)
+const THEMES = {
+  [MapId.JERUSALEM]: {
+    ground: cell(TOWN, 0), door: cell(TOWN, 85),
+    [Tile.WALL]: cell(TOWN, 126), [Tile.PATH]: cell(TOWN, 25), [Tile.EXIT]: cell(TOWN, 109), [Tile.TREE]: cell(TOWN, 16),
+  },
+  [MapId.JUDEA]: {
+    ground: cell(DESERT, 64), door: cell(TOWN, 85),
+    [Tile.WALL]: cell(TOWN, 126), [Tile.PATH]: cell(DESERT, 173), [Tile.EXIT]: cell(TOWN, 109),
+    [Tile.TREE]: cell(DESERT, 63), [Tile.ROCK]: cell(DESERT, 58),
+  },
 }
-const DOOR_COLOR = '#8d6e63'
+const NPC_ROW = { a: 1, b: 2, c: 3 }
+const FACING_COLUMN = { [Key.DOWN]: 0, [Key.UP]: 1, [Key.LEFT]: 2, [Key.RIGHT]: 2 }
+const WALK_FRAMES = [0, 1, 0, 2]
 const KEYS = {
   ArrowUp: Key.UP, w: Key.UP, ArrowDown: Key.DOWN, s: Key.DOWN, ArrowLeft: Key.LEFT, a: Key.LEFT,
   ArrowRight: Key.RIGHT, d: Key.RIGHT, z: Key.CONFIRM, Enter: Key.CONFIRM, x: Key.CANCEL, Escape: Key.CANCEL,
@@ -20,6 +34,7 @@ const KEYS = {
 
 const ctx = document.querySelector('canvas').getContext('2d')
 ctx.scale(SCALE, SCALE)
+ctx.imageSmoothingEnabled = false
 ctx.font = '7px monospace'
 ctx.textBaseline = 'top'
 
@@ -48,14 +63,31 @@ function drawBox(x, y, width, height) {
   ctx.fillStyle = '#000'
 }
 
-const GROUND = { jerusalem: Tile.GRASS, judea: Tile.SAND }
+function tileCell(theme, map, tile, opened) {
+  if (isDoor(map, tile)) return opened.includes(tile) ? theme[Tile.PATH] : theme.door
+  if (tile === Tile.SPAWN) return theme[Tile.PATH]
+  return tile === Tile.WATER ? WATER : theme[tile]
+}
 
-function tileColor(map, tile, opened) {
-  if (isDoor(map, tile)) return opened.includes(tile) ? COLORS[Tile.PATH] : DOOR_COLOR
-  return isNpc(map, tile) ? COLORS[GROUND[map]] : COLORS[tile]
+function drawCell({ sheet: from, index }, x, y) {
+  const column = index % from.columns
+  const row = Math.floor(index / from.columns)
+  ctx.drawImage(from.image, column * TILE, row * TILE, TILE, TILE, x, y, TILE, TILE)
+}
+
+function drawPlayer(player, x, y) {
+  const walking = held.length > 0 && state.mode === Mode.MAP
+  const frame = walking ? WALK_FRAMES[Math.floor((player.x + player.y) * 2) & 3] : 0
+  const sprite = cell(SPRITES, FACING_COLUMN[facing] * 3 + frame)
+  ctx.save()
+  ctx.translate(facing === Key.LEFT ? x + TILE : x, y)
+  ctx.scale(facing === Key.LEFT ? -1 : 1, 1)
+  drawCell(sprite, 0, 0)
+  ctx.restore()
 }
 
 function drawMap({ map, opened, player }) {
+  const theme = THEMES[map]
   const rows = rowsOf(map)
   const camX = clamp(player.x - 7, 0, rows[0].length - VIEW_W)
   const camY = clamp(player.y - 4, 0, rows.length - VIEW_H)
@@ -66,16 +98,13 @@ function drawMap({ map, opened, player }) {
       const tile = tileAt(map, mapX, mapY)
       const left = snap((mapX - camX) * TILE)
       const top = snap((mapY - camY) * TILE)
-      ctx.fillStyle = tileColor(map, tile, opened)
-      ctx.fillRect(left, top, TILE, TILE)
-      if (isNpc(map, tile)) {
-        ctx.fillStyle = '#7b1fa2'
-        ctx.fillRect(left + 3, top + 3, 10, 10)
-      }
+      drawCell(theme.ground, left, top)
+      const overlay = tileCell(theme, map, tile, opened)
+      if (overlay) drawCell(overlay, left, top)
+      if (isNpc(map, tile)) drawCell(cell(SPRITES, NPC_ROW[tile] * SPRITES.columns), left, top)
     }
   }
-  ctx.fillStyle = '#d32f2f'
-  ctx.fillRect(snap((player.x - camX) * TILE) + 3, snap((player.y - camY) * TILE) + 3, 10, 10)
+  drawPlayer(player, snap((player.x - camX) * TILE), snap((player.y - camY) * TILE))
 }
 
 function drawPuzzle(state) {
@@ -114,6 +143,7 @@ const MAX_FRAME_MS = 50
 
 let state = initialState()
 let held = []
+let facing = Key.DOWN
 let lastFrame = 0
 
 function frame(now) {
@@ -131,7 +161,10 @@ addEventListener('keydown', (event) => {
   event.preventDefault()
   if (event.repeat) return
   const isDirection = DIRECTIONS.includes(key)
-  if (isDirection) held = [...held.filter((heldKey) => heldKey !== key), key]
+  if (isDirection) {
+    held = [...held.filter((heldKey) => heldKey !== key), key]
+    facing = key
+  }
   if (!isDirection || state.mode !== Mode.MAP) state = update(state, key)
 })
 addEventListener('keyup', (event) => {

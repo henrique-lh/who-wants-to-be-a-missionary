@@ -1,0 +1,2 @@
+Tiles: Kenney Tiny Town and Desert Shooter Pack (CC0, kenney.nl).
+Sprites and water tile: drawn for this project.
