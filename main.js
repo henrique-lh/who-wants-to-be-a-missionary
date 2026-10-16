@@ -38,6 +38,11 @@ const RIPPLE_MS = 700
 const NEIGHBORS = [[0, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]]
 const NPC_ROW = { a: 1, b: 2, c: 3 }
 const VILLAGER_ROWS = [4, 5, 6, 7]
+const BREATH_MS = 500
+const NEAR_TILES = 2.5
+const ARROW_FILL = '#ffd54f'
+const ARROW_OUTLINE = '#47324b'
+const ARROW = ['ooooooo', 'oyyyyyo', '.oyyyo.', '..oyo..', '...o...']
 const CROSS = [[0, -1], [1, 0], [0, 1], [-1, 0]]
 const FACING_COLUMN = { [Key.DOWN]: 0, [Key.UP]: 1, [Key.LEFT]: 2, [Key.RIGHT]: 2 }
 const WALK_FRAMES = [0, 1, 0, 2]
@@ -85,6 +90,8 @@ function surfaceKind(map, x, y) {
 }
 
 const sprite = (row) => cell(SPRITES, row * SPRITES.columns)
+const isPerson = (map, tile) => isNpc(map, tile) || tile === Tile.VILLAGER || tile === Tile.CHATTER
+const talks = (map, tile, opened) => tile === Tile.CHATTER || (isNpc(map, tile) && !opened.includes(tile.toUpperCase()))
 
 function tileCells(map, tile, x, y, opened) {
   const variant = mix(x, y, 0)
@@ -92,10 +99,31 @@ function tileCells(map, tile, x, y, opened) {
   if (tile === Tile.GRASS || tile === Tile.SAND) return SURFACES[tile][variant % SURFACES[tile].length]
   if (tile === Tile.PATH || tile === Tile.SPAWN) return [PATHS[map]]
   const ground = SURFACES[surfaceKind(map, x, y)][0]
-  if (isNpc(map, tile)) return [...ground, sprite(NPC_ROW[tile])]
-  if (tile === Tile.VILLAGER || tile === Tile.CHATTER) return [...ground, sprite(VILLAGER_ROWS[variant % VILLAGER_ROWS.length])]
+  if (isPerson(map, tile)) return ground
   if (OBJECTS[tile]) return [...ground, OBJECTS[tile]]
   return FLAT[tile] ? [FLAT[tile]] : []
+}
+
+// People rise one pixel on every breath, out of step with each other, so the map is never still.
+// A bobbing arrow marks anyone nearby who has something to say.
+const isNear = (map, player, x, y) => {
+  const height = rowsOf(map).length
+  const dy = loops(map) ? wrapped(player.y - y + height / 2, height) - height / 2 : player.y - y
+  return Math.hypot(player.x - x, dy) <= NEAR_TILES
+}
+
+function drawPerson(map, tile, x, y, left, top, opened, player) {
+  const variant = mix(x, y, 0)
+  const now = performance.now()
+  const breath = Math.floor(now / BREATH_MS + (variant % 4)) % 2
+  drawCell(sprite(isNpc(map, tile) ? NPC_ROW[tile] : VILLAGER_ROWS[variant % VILLAGER_ROWS.length]), left, top - breath)
+  if (!talks(map, tile, opened) || !isNear(map, player, x, y)) return
+  const arrowTop = top - 7 + snap(Math.sin(now / 230 + (variant % 7)) * 2)
+  ARROW.forEach((line, row) => [...line].forEach((pixel, column) => {
+    if (pixel === '.') return
+    ctx.fillStyle = pixel === 'o' ? ARROW_OUTLINE : ARROW_FILL
+    ctx.fillRect(left + 4 + column, arrowTop + row, 1, 1)
+  }))
 }
 
 // Grass meets sand with a ragged edge, a few pixels deep, instead of a straight seam.
@@ -179,6 +207,7 @@ function drawMap({ map, opened, player }) {
       const row = loops(map) ? wrapped(mapY, rows.length) : mapY
       tileCells(map, tile, mapX, row, opened).forEach((layer) => drawCell(layer, left, top))
       if (tile === Tile.GRASS) drawBorder(map, mapX, mapY, left, top)
+      if (isPerson(map, tile)) drawPerson(map, tile, mapX, row, left, top, opened, player)
       if (tile === Tile.WATER) drawWater(map, mapX, mapY, left, top)
       if (tile === Tile.ROOF) drawCell(roofCell(map, mapX, mapY), left, top)
     }
