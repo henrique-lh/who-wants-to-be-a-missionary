@@ -12,7 +12,6 @@ const TOWN = sheet('assets/town.png', 12)
 const DESERT = sheet('assets/desert.png', 18)
 const SPRITES = sheet('assets/sprites.png', 9)
 const cell = (from, index) => ({ sheet: from, index })
-const WATER = cell(SPRITES, 36)
 const GRASS = cell(TOWN, 0)
 const SAND = cell(DESERT, 64)
 const WALL = cell(TOWN, 126)
@@ -20,18 +19,26 @@ const DOOR = cell(TOWN, 85)
 const EXIT = cell(TOWN, 109)
 const CACTUS = cell(DESERT, 63)
 const ROCK = cell(DESERT, 58)
+// Water has no cells: drawWater paints it so banks and depth follow the pond shape.
 // Each tile is a stack of cells drawn bottom to top. `npc` is the ground under a character.
 const THEMES = {
   [MapId.JERUSALEM]: {
     [Tile.GRASS]: [GRASS], [Tile.SAND]: [SAND], [Tile.WALL]: [WALL], [Tile.PATH]: [cell(TOWN, 25)],
-    [Tile.EXIT]: [EXIT], [Tile.WATER]: [WATER], [Tile.TREE]: [GRASS, cell(TOWN, 16)],
+    [Tile.EXIT]: [EXIT], [Tile.WATER]: [], [Tile.TREE]: [GRASS, cell(TOWN, 28)],
     [Tile.CACTUS]: [SAND, CACTUS], [Tile.ROCK]: [SAND, ROCK], door: [DOOR], npc: [GRASS],
   },
   [MapId.JUDEA]: {
     [Tile.SAND]: [SAND], [Tile.WALL]: [WALL], [Tile.PATH]: [cell(DESERT, 173)], [Tile.EXIT]: [EXIT],
-    [Tile.WATER]: [WATER], [Tile.CACTUS]: [SAND, CACTUS], [Tile.ROCK]: [SAND, ROCK], door: [DOOR], npc: [SAND],
+    [Tile.WATER]: [], [Tile.CACTUS]: [SAND, CACTUS], [Tile.ROCK]: [SAND, ROCK], door: [DOOR], npc: [SAND],
   },
 }
+const WATER_SHALLOW = '#6fb8ee'
+const WATER_DEEP = '#4d97dd'
+const WATER_BANK = '#47324b'
+const WATER_FOAM = '#a8dcf7'
+const WATER_RIPPLE = '#8cc9f0'
+const RIPPLE_MS = 700
+const NEIGHBORS = [[0, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]]
 const NPC_ROW = { a: 1, b: 2, c: 3 }
 const FACING_COLUMN = { [Key.DOWN]: 0, [Key.UP]: 1, [Key.LEFT]: 2, [Key.RIGHT]: 2 }
 const WALK_FRAMES = [0, 1, 0, 2]
@@ -77,6 +84,36 @@ function tileLayers(theme, map, tile, opened) {
   return theme[tile === Tile.SPAWN ? Tile.PATH : tile]
 }
 
+function drawWater(map, mapX, mapY, left, top) {
+  const [up, right, down, west, northWest, northEast, southEast, southWest] = NEIGHBORS.map(
+    ([dx, dy]) => tileAt(map, mapX + dx, mapY + dy) !== Tile.WATER,
+  )
+  const paint = (color, [x, y, width, height]) => {
+    ctx.fillStyle = color
+    ctx.fillRect(left + x, top + y, width, height)
+  }
+  paint([up, right, down, west, northWest, northEast, southEast, southWest].some(Boolean) ? WATER_SHALLOW : WATER_DEEP, [0, 0, TILE, TILE])
+  const phase = Math.floor(performance.now() / RIPPLE_MS) % 2
+  const seed = (mapX * 7 + mapY * 13) % 5
+  paint(WATER_RIPPLE, [3 + seed + phase * 2, 4 + (seed % 3) * 3, 3, 1])
+  paint(WATER_RIPPLE, [8 - seed + phase * 2, 11 - (seed % 2) * 4, 3, 1])
+  const banks = [
+    [up, [0, 1, TILE, 1], [0, 0, TILE, 1]],
+    [down, [0, TILE - 2, TILE, 1], [0, TILE - 1, TILE, 1]],
+    [west, [1, 0, 1, TILE], [0, 0, 1, TILE]],
+    [right, [TILE - 2, 0, 1, TILE], [TILE - 1, 0, 1, TILE]],
+  ]
+  banks.filter(([isLand]) => isLand).forEach(([, foam, bank]) => {
+    paint(WATER_FOAM, foam)
+    paint(WATER_BANK, bank)
+  })
+  const corners = [
+    [northWest, up, west, [0, 0]], [northEast, up, right, [TILE - 1, 0]],
+    [southEast, down, right, [TILE - 1, TILE - 1]], [southWest, down, west, [0, TILE - 1]],
+  ]
+  corners.filter(([diagonal, a, b]) => diagonal && !a && !b).forEach(([, , , [x, y]]) => paint(WATER_BANK, [x, y, 1, 1]))
+}
+
 function drawCell({ sheet: from, index }, x, y) {
   const column = index % from.columns
   const row = Math.floor(index / from.columns)
@@ -107,6 +144,7 @@ function drawMap({ map, opened, player }) {
       const left = snap((mapX - camX) * TILE)
       const top = snap((mapY - camY) * TILE)
       tileLayers(theme, map, tile, opened).forEach((layer) => drawCell(layer, left, top))
+      if (tile === Tile.WATER) drawWater(map, mapX, mapY, left, top)
       if (isNpc(map, tile)) drawCell(cell(SPRITES, NPC_ROW[tile] * SPRITES.columns), left, top)
     }
   }
