@@ -8,8 +8,8 @@ export const Tile = Object.freeze({ WALL: '#', TREE: 'T', WATER: '~', GRASS: 'g'
   ROOF: 'H', FACADE: 'M', WINDOW: 'N', HOUSE_DOOR: 'D', PAVING: 'P', VILLAGER: 'v', CHATTER: 'w',
 })
 
-// Player position is the tile's top-left corner, in tiles. The hitbox is a square around the tile centre.
-const HITBOX = 0.25
+// Player position is the tile's top-left corner, in tiles. The hitbox is a small square around the tile centre, so a few pixels of drift never snag on a neighbour.
+const HITBOX = 0.15
 const SOLID = new Set([
   Tile.WALL, Tile.TREE, Tile.WATER, Tile.ROCK, Tile.CACTUS, Tile.ROOF, Tile.FACADE, Tile.WINDOW, Tile.HOUSE_DOOR,
   Tile.VILLAGER, Tile.CHATTER,

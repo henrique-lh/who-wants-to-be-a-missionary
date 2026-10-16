@@ -61,6 +61,12 @@ const chatty = standBelow(tilesOf(MapId.JERUSALEM, Tile.CHATTER)[0])
 assert.deepEqual(update(chatty, Key.UP).player, chatty.player)
 assert.equal(update(chatty, Key.CONFIRM).mode, Mode.DIALOGUE)
 
+// drifting a little off the lane does not trap the player beside a character, and nothing pulls them sideways
+const drifted = { ...finishDialogue(initialState()), player: { x: 22.2, y: 11.7 } }
+const passing = Array(9).fill(Key.RIGHT).reduce((s, key) => update(s, key, 0.1), drifted)
+assert(passing.player.x > 22.9, 'walks on past the character')
+assert.equal(passing.player.y, drifted.player.y)
+
 // closed door blocks and explains
 let state = finishDialogue(initialState())
 const firstDoorX = rowsOf(MapId.JERUSALEM).find((row) => row.includes('@')).search(/[A-Z]/)
@@ -73,7 +79,7 @@ assert.equal(bumped.mode, Mode.DIALOGUE)
 const free = finishDialogue(initialState())
 const nudged = update(update(free, Key.RIGHT, 0.2), Key.DOWN, 0.2)
 assert.deepEqual(nudged.player, { x: free.player.x + 0.2, y: free.player.y + 0.2 })
-assert.equal(update(state, Key.RIGHT, 0.3).mode, Mode.DIALOGUE, 'closed door blocks a partial step too')
+assert.equal(update(state, Key.RIGHT, 0.4).mode, Mode.DIALOGUE, 'closed door blocks a partial step too')
 
 // wrong answer keeps progress and flags a hint
 let puzzleState = finishDialogue(update(finishDialogue(bumped), Key.CONFIRM))
