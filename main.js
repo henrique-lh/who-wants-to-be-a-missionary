@@ -1,5 +1,5 @@
 import { END_LINES, MapId, PuzzleType } from './bible.js'
-import { Key, Mode, Tile, initialState, isDoor, isNpc, puzzleOf, rowsOf, tileAt, update, visibleItems } from './game.js'
+import { Key, Mode, Tile, initialState, isDoor, isNpc, loops, puzzleOf, rowsOf, tileAt, update, visibleItems } from './game.js'
 
 const SCALE = 6
 const STEP_MS = 350
@@ -13,15 +13,23 @@ const DESERT = sheet('assets/desert.png', 18)
 const SPRITES = sheet('assets/sprites.png', 9)
 const cell = (from, index) => ({ sheet: from, index })
 const WATER = cell(SPRITES, 36)
+const GRASS = cell(TOWN, 0)
+const SAND = cell(DESERT, 64)
+const WALL = cell(TOWN, 126)
+const DOOR = cell(TOWN, 85)
+const EXIT = cell(TOWN, 109)
+const CACTUS = cell(DESERT, 63)
+const ROCK = cell(DESERT, 58)
+// Each tile is a stack of cells drawn bottom to top. `npc` is the ground under a character.
 const THEMES = {
   [MapId.JERUSALEM]: {
-    ground: cell(TOWN, 0), door: cell(TOWN, 85),
-    [Tile.WALL]: cell(TOWN, 126), [Tile.PATH]: cell(TOWN, 25), [Tile.EXIT]: cell(TOWN, 109), [Tile.TREE]: cell(TOWN, 16),
+    [Tile.GRASS]: [GRASS], [Tile.SAND]: [SAND], [Tile.WALL]: [WALL], [Tile.PATH]: [cell(TOWN, 25)],
+    [Tile.EXIT]: [EXIT], [Tile.WATER]: [WATER], [Tile.TREE]: [GRASS, cell(TOWN, 16)],
+    [Tile.CACTUS]: [SAND, CACTUS], [Tile.ROCK]: [SAND, ROCK], door: [DOOR], npc: [GRASS],
   },
   [MapId.JUDEA]: {
-    ground: cell(DESERT, 64), door: cell(TOWN, 85),
-    [Tile.WALL]: cell(TOWN, 126), [Tile.PATH]: cell(DESERT, 173), [Tile.EXIT]: cell(TOWN, 109),
-    [Tile.TREE]: cell(DESERT, 63), [Tile.ROCK]: cell(DESERT, 58),
+    [Tile.SAND]: [SAND], [Tile.WALL]: [WALL], [Tile.PATH]: [cell(DESERT, 173)], [Tile.EXIT]: [EXIT],
+    [Tile.WATER]: [WATER], [Tile.CACTUS]: [SAND, CACTUS], [Tile.ROCK]: [SAND, ROCK], door: [DOOR], npc: [SAND],
   },
 }
 const NPC_ROW = { a: 1, b: 2, c: 3 }
@@ -63,10 +71,10 @@ function drawBox(x, y, width, height) {
   ctx.fillStyle = '#000'
 }
 
-function tileCell(theme, map, tile, opened) {
+function tileLayers(theme, map, tile, opened) {
   if (isDoor(map, tile)) return opened.includes(tile) ? theme[Tile.PATH] : theme.door
-  if (tile === Tile.SPAWN) return theme[Tile.PATH]
-  return tile === Tile.WATER ? WATER : theme[tile]
+  if (isNpc(map, tile)) return theme.npc
+  return theme[tile === Tile.SPAWN ? Tile.PATH : tile]
 }
 
 function drawCell({ sheet: from, index }, x, y) {
@@ -90,7 +98,7 @@ function drawMap({ map, opened, player }) {
   const theme = THEMES[map]
   const rows = rowsOf(map)
   const camX = clamp(player.x - 7, 0, rows[0].length - VIEW_W)
-  const camY = clamp(player.y - 4, 0, rows.length - VIEW_H)
+  const camY = loops(map) ? player.y - 4 : clamp(player.y - 4, 0, rows.length - VIEW_H)
   for (let ty = 0; ty <= VIEW_H; ty++) {
     for (let tx = 0; tx <= VIEW_W; tx++) {
       const mapX = Math.floor(camX) + tx
@@ -98,9 +106,7 @@ function drawMap({ map, opened, player }) {
       const tile = tileAt(map, mapX, mapY)
       const left = snap((mapX - camX) * TILE)
       const top = snap((mapY - camY) * TILE)
-      drawCell(theme.ground, left, top)
-      const overlay = tileCell(theme, map, tile, opened)
-      if (overlay) drawCell(overlay, left, top)
+      tileLayers(theme, map, tile, opened).forEach((layer) => drawCell(layer, left, top))
       if (isNpc(map, tile)) drawCell(cell(SPRITES, NPC_ROW[tile] * SPRITES.columns), left, top)
     }
   }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { CHAPTERS, MapId, PuzzleType, VERSES } from './bible.js'
-import { Key, Mode, expectedIndex, initialState, isDoor, isNpc, puzzleOf, rowsOf, update, visibleItems } from './game.js'
+import { Key, Mode, Tile, expectedIndex, initialState, isDoor, isNpc, loops, puzzleOf, rowsOf, tileAt, update, visibleItems } from './game.js'
 
 const MAP_ORDER = [MapId.JERUSALEM, MapId.JUDEA]
 
@@ -18,6 +18,15 @@ for (const map of MAP_ORDER) {
   }
 }
 
+// the first map loops top to bottom through open ground, the others are closed
+const height = rowsOf(MapId.JERUSALEM).length
+assert.equal(loops(MapId.JERUSALEM), true)
+assert.equal(loops(MapId.JUDEA), false)
+assert.equal(tileAt(MapId.JERUSALEM, 36, -1), tileAt(MapId.JERUSALEM, 36, height - 1))
+assert.notEqual(tileAt(MapId.JERUSALEM, 36, 0), Tile.WALL)
+assert.notEqual(tileAt(MapId.JERUSALEM, 36, height - 1), Tile.WALL)
+assert.equal(tileAt(MapId.JUDEA, 2, -1), Tile.WALL)
+
 const press = (state, ...keys) => keys.reduce((s, key) => update(s, key), state)
 const finishDialogue = (state) => (state.mode === Mode.DIALOGUE ? finishDialogue(update(state, Key.CONFIRM)) : state)
 const walkTo = (state, x) => press(state, ...Array(Math.max(0, x - state.player.x)).fill(Key.RIGHT))
@@ -34,11 +43,16 @@ const settle = (state) =>
   : state.mode === Mode.PUZZLE ? settle(correctPick(state))
   : state
 
+// walking off the last row of the looping map continues on the first
+const seam = { ...finishDialogue(initialState()), player: { x: 36, y: height - 1 } }
+assert.equal(update(seam, Key.DOWN).player.y, height)
+
 // closed door blocks and explains
 let state = finishDialogue(initialState())
-state = walkTo(state, 7)
+const firstDoorX = rowsOf(MapId.JERUSALEM).find((row) => row.includes('@')).search(/[A-Z]/)
+state = walkTo(state, firstDoorX - 1)
 const bumped = update(state, Key.RIGHT)
-assert.equal(bumped.player.x, 7)
+assert.equal(bumped.player.x, firstDoorX - 1)
 assert.equal(bumped.mode, Mode.DIALOGUE)
 
 // movement is continuous: any direction responds at once, by the distance given
@@ -48,7 +62,7 @@ assert.deepEqual(nudged.player, { x: free.player.x + 0.2, y: free.player.y + 0.2
 assert.equal(update(state, Key.RIGHT, 0.3).mode, Mode.DIALOGUE, 'closed door blocks a partial step too')
 
 // wrong answer keeps progress and flags a hint
-let puzzleState = finishDialogue(update(press(finishDialogue(bumped), Key.LEFT), Key.CONFIRM))
+let puzzleState = finishDialogue(update(finishDialogue(bumped), Key.CONFIRM))
 assert.equal(puzzleState.mode, Mode.PUZZLE)
 puzzleState = wrongPick(puzzleState)
 assert.equal(puzzleState.mode, Mode.PUZZLE)
@@ -62,7 +76,7 @@ for (const [index, map] of MAP_ORDER.entries()) {
   assert.equal(state.opened.length, 0)
   const rows = rowsOf(map)
   for (const letter of Object.keys(CHAPTERS[map].puzzles)) {
-    state = settle(update(walkTo(state, rows[4].indexOf(letter)), Key.CONFIRM))
+    state = settle(update(walkTo(state, rows.find((row) => row.includes(letter)).indexOf(letter)), Key.CONFIRM))
     assert.equal(state.mode, Mode.MAP)
   }
   assert.equal(state.opened.length, 3)

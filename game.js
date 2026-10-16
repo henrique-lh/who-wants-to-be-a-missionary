@@ -4,15 +4,17 @@ import { ROWS as JUDEA } from './judea.js'
 
 export const Mode = Object.freeze({ DIALOGUE: 'dialogue', MAP: 'map', PUZZLE: 'puzzle', END: 'end' })
 export const Key = Object.freeze({ UP: 'up', DOWN: 'down', LEFT: 'left', RIGHT: 'right', CONFIRM: 'confirm', CANCEL: 'cancel' })
-export const Tile = Object.freeze({ WALL: '#', TREE: 'T', WATER: '~', GRASS: 'g', SAND: 's', ROCK: 'R', PATH: '.', EXIT: '>', SPAWN: '@' })
+export const Tile = Object.freeze({ WALL: '#', TREE: 'T', WATER: '~', GRASS: 'g', SAND: 's', ROCK: 'R', CACTUS: 'X', PATH: '.', EXIT: '>', SPAWN: '@' })
 
 // Player position is the tile's top-left corner, in tiles. The hitbox is a square around the tile centre.
 const HITBOX = 0.25
-const SOLID = new Set([Tile.WALL, Tile.TREE, Tile.WATER, Tile.ROCK])
+const SOLID = new Set([Tile.WALL, Tile.TREE, Tile.WATER, Tile.ROCK, Tile.CACTUS])
 const STEP = { [Key.UP]: [0, -1], [Key.DOWN]: [0, 1], [Key.LEFT]: [-1, 0], [Key.RIGHT]: [1, 0] }
-const MAPS = [{ id: MapId.JERUSALEM, rows: JERUSALEM }, { id: MapId.JUDEA, rows: JUDEA }]
+const MAPS = [{ id: MapId.JERUSALEM, rows: JERUSALEM, loops: true }, { id: MapId.JUDEA, rows: JUDEA, loops: false }]
 
-export const rowsOf = (mapId) => MAPS.find(({ id }) => id === mapId).rows
+const mapOf = (mapId) => MAPS.find(({ id }) => id === mapId)
+export const rowsOf = (mapId) => mapOf(mapId).rows
+export const loops = (mapId) => mapOf(mapId).loops
 export const puzzlesOf = (mapId) => CHAPTERS[mapId].puzzles
 export const puzzleOf = (state) => puzzlesOf(state.map)[state.puzzle.id]
 const startOf = (mapId) => {
@@ -22,7 +24,11 @@ const startOf = (mapId) => {
 
 export const isNpc = (mapId, tile) => Object.hasOwn(puzzlesOf(mapId), tile)
 export const isDoor = (mapId, tile) => tile === tile.toUpperCase() && isNpc(mapId, tile.toLowerCase())
-export const tileAt = (mapId, x, y) => rowsOf(mapId)[y]?.[x] ?? Tile.WALL
+const wrapped = (value, size) => ((value % size) + size) % size
+export const tileAt = (mapId, x, y) => {
+  const rows = rowsOf(mapId)
+  return rows[loops(mapId) ? wrapped(y, rows.length) : y]?.[x] ?? Tile.WALL
+}
 const touching = (mapId, { x, y }) =>
   [-HITBOX, HITBOX].flatMap((dy) => [-HITBOX, HITBOX].map((dx) => tileAt(mapId, Math.floor(x + 0.5 + dx), Math.floor(y + 0.5 + dy))))
 export const visibleItems = (puzzle) => puzzle.order.filter((item) => !puzzle.picked.includes(item))

@@ -24,7 +24,7 @@ export const END_LINES = ['Continua...', 'Próximo mapa: Samaria (ainda não con
 export const CHAPTERS = {
   [MapId.JERUSALEM]: {
     introLines: [
-      'Jerusalém. Você recebeu uma missão.',
+      'Você recebeu uma missão. Siga a estrada até Jerusalém.',
       quote('Marcos 16:15'),
       quote('Atos 1:8'),
       'Setas: andar. Z: falar e confirmar. X: voltar.',
