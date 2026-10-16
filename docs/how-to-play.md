@@ -16,10 +16,11 @@ The game opens on an intro dialogue. Arrow keys do nothing there. Press **Z** or
 
 ## The screen
 
-- Red square: you.
-- Purple square: a character. Stand next to one and press Z to talk.
-- Brown tile: a closed door. Walk into it to see why it is closed.
-- Yellow tile: the exit to the next map.
+- The character in the white robe is you.
+- Other people stand around the map. Stand next to one and press Z to talk. Some have something to say, some are silent. The ones who give a puzzle stand just before a gate.
+- A gate is a stone wall across the whole map with one wooden door. It stays closed until you solve the puzzle of the person next to it.
+- The grey tile at the east end of the road is the exit to the next map.
+- The map loops: walk off the top or bottom edge and you come back on the other side.
 
 ## Puzzles
 

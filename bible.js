@@ -30,6 +30,14 @@ export const CHAPTERS = {
       'Setas: andar. Z: falar e confirmar. X: voltar.',
     ],
     exitLines: ['Jerusalém ficou para trás. Próximo destino: Judeia.'],
+    // Flavor lines for villagers. They quote no Scripture and make no claims.
+    chatter: [
+      'Que a paz esteja com você, viajante.',
+      'A estrada segue para o leste, até a cidade.',
+      'Descanse à sombra das árvores antes de seguir.',
+      'Cuidado com os espinhos dos cactos no deserto.',
+      'O mercado da cidade está cheio hoje.',
+    ],
     puzzles: {
       a: {
         type: PuzzleType.ORDER,
@@ -76,6 +84,7 @@ export const CHAPTERS = {
   [MapId.JUDEA]: {
     introLines: ['Judeia. Os discípulos foram espalhados, e a palavra foi com eles.'],
     exitLines: ['Judeia ficou para trás. Próximo destino: Samaria.'],
+    chatter: ['O sol é forte por aqui. Beba água.', 'Que a paz esteja com você, viajante.'],
     puzzles: {
       a: {
         type: PuzzleType.ORDER,

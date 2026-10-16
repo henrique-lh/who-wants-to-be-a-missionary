@@ -51,6 +51,16 @@ assert.equal(update(seam, Key.DOWN).player.y, height)
 const street = { ...finishDialogue(initialState()), player: { x: 75, y: 12 } }
 assert.deepEqual(update(street, Key.UP).player, street.player)
 
+// villagers fill the map: all block the way, only the talkative ones answer
+const tilesOf = (map, tile) => rowsOf(map).flatMap((row, y) => [...row].flatMap((char, x) => (char === tile ? [{ x, y }] : [])))
+const standBelow = ({ x, y }) => ({ ...finishDialogue(initialState()), player: { x, y: y + 1 } })
+const silent = standBelow(tilesOf(MapId.JERUSALEM, Tile.VILLAGER)[0])
+assert.deepEqual(update(silent, Key.UP).player, silent.player)
+assert.equal(update(silent, Key.CONFIRM).mode, Mode.MAP)
+const chatty = standBelow(tilesOf(MapId.JERUSALEM, Tile.CHATTER)[0])
+assert.deepEqual(update(chatty, Key.UP).player, chatty.player)
+assert.equal(update(chatty, Key.CONFIRM).mode, Mode.DIALOGUE)
+
 // closed door blocks and explains
 let state = finishDialogue(initialState())
 const firstDoorX = rowsOf(MapId.JERUSALEM).find((row) => row.includes('@')).search(/[A-Z]/)

@@ -5,13 +5,14 @@ import { ROWS as JUDEA } from './judea.js'
 export const Mode = Object.freeze({ DIALOGUE: 'dialogue', MAP: 'map', PUZZLE: 'puzzle', END: 'end' })
 export const Key = Object.freeze({ UP: 'up', DOWN: 'down', LEFT: 'left', RIGHT: 'right', CONFIRM: 'confirm', CANCEL: 'cancel' })
 export const Tile = Object.freeze({ WALL: '#', TREE: 'T', WATER: '~', GRASS: 'g', SAND: 's', ROCK: 'R', CACTUS: 'X', PATH: '.', EXIT: '>', SPAWN: '@',
-  ROOF: 'H', FACADE: 'M', WINDOW: 'N', HOUSE_DOOR: 'D', PAVING: 'P',
+  ROOF: 'H', FACADE: 'M', WINDOW: 'N', HOUSE_DOOR: 'D', PAVING: 'P', VILLAGER: 'v', CHATTER: 'w',
 })
 
 // Player position is the tile's top-left corner, in tiles. The hitbox is a square around the tile centre.
 const HITBOX = 0.25
 const SOLID = new Set([
   Tile.WALL, Tile.TREE, Tile.WATER, Tile.ROCK, Tile.CACTUS, Tile.ROOF, Tile.FACADE, Tile.WINDOW, Tile.HOUSE_DOOR,
+  Tile.VILLAGER, Tile.CHATTER,
 ])
 const STEP = { [Key.UP]: [0, -1], [Key.DOWN]: [0, 1], [Key.LEFT]: [-1, 0], [Key.RIGHT]: [1, 0] }
 const MAPS = [{ id: MapId.JERUSALEM, rows: JERUSALEM, loops: true }, { id: MapId.JUDEA, rows: JUDEA, loops: false }]
@@ -28,7 +29,7 @@ const startOf = (mapId) => {
 
 export const isNpc = (mapId, tile) => Object.hasOwn(puzzlesOf(mapId), tile)
 export const isDoor = (mapId, tile) => tile === tile.toUpperCase() && isNpc(mapId, tile.toLowerCase())
-const wrapped = (value, size) => ((value % size) + size) % size
+export const wrapped = (value, size) => ((value % size) + size) % size
 export const tileAt = (mapId, x, y) => {
   const rows = rowsOf(mapId)
   return rows[loops(mapId) ? wrapped(y, rows.length) : y]?.[x] ?? Tile.WALL
@@ -98,8 +99,16 @@ function afterExit(mapId) {
 function talk(state) {
   const x = Math.round(state.player.x)
   const y = Math.round(state.player.y)
-  const npc = Object.values(STEP).map(([dx, dy]) => tileAt(state.map, x + dx, y + dy)).find((tile) => isNpc(state.map, tile))
-  if (!npc) return state
+  const around = Object.values(STEP).map(([dx, dy]) => ({ tile: tileAt(state.map, x + dx, y + dy), x: x + dx, y: y + dy }))
+  const npc = around.find(({ tile }) => isNpc(state.map, tile))
+  if (npc) return talkToPuzzleNpc(state, npc.tile)
+  const chatter = around.find(({ tile }) => tile === Tile.CHATTER)
+  return chatter ? say(state, [chatterLine(state.map, chatter)]) : state
+}
+
+const chatterLine = (mapId, { x, y }) => CHAPTERS[mapId].chatter[(x + y) % CHAPTERS[mapId].chatter.length]
+
+function talkToPuzzleNpc(state, npc) {
   const puzzle = puzzlesOf(state.map)[npc]
   return state.opened.includes(npc.toUpperCase())
     ? say(state, DONE_LINES)

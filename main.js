@@ -1,5 +1,5 @@
 import { END_LINES, MapId, PuzzleType } from './bible.js'
-import { Key, Mode, Tile, initialState, isDoor, isNpc, loops, puzzleOf, rowsOf, tileAt, update, visibleItems } from './game.js'
+import { Key, Mode, Tile, initialState, isDoor, isNpc, loops, puzzleOf, rowsOf, tileAt, update, visibleItems, wrapped } from './game.js'
 
 const SCALE = 6
 const STEP_MS = 350
@@ -13,28 +13,22 @@ const DESERT = sheet('assets/desert.png', 18)
 const SPRITES = sheet('assets/sprites.png', 9)
 const CITY = sheet('assets/city.png', 4)
 const cell = (from, index) => ({ sheet: from, index })
-const GRASS = cell(TOWN, 0)
 const SAND = cell(DESERT, 64)
-const WALL = cell(TOWN, 126)
 const DOOR = cell(TOWN, 85)
-const EXIT = cell(TOWN, 109)
-const CACTUS = cell(DESERT, 63)
-const ROCK = cell(DESERT, 58)
-// Water and roofs have no cells: they are painted from their neighbours so shapes join up.
-// Each tile is a stack of cells drawn bottom to top. `npc` is the ground under a character.
-const THEMES = {
-  [MapId.JERUSALEM]: {
-    [Tile.GRASS]: [GRASS], [Tile.SAND]: [SAND], [Tile.WALL]: [WALL], [Tile.PATH]: [cell(TOWN, 25)],
-    [Tile.EXIT]: [EXIT], [Tile.WATER]: [], [Tile.TREE]: [GRASS, cell(TOWN, 28)],
-    [Tile.CACTUS]: [SAND, CACTUS], [Tile.ROCK]: [SAND, ROCK], door: [DOOR], npc: [GRASS],
-    [Tile.ROOF]: [], [Tile.FACADE]: [cell(CITY, 11)], [Tile.WINDOW]: [cell(CITY, 3)], [Tile.HOUSE_DOOR]: [cell(CITY, 7)],
-    [Tile.PAVING]: [cell(CITY, 5)],
-  },
-  [MapId.JUDEA]: {
-    [Tile.SAND]: [SAND], [Tile.WALL]: [WALL], [Tile.PATH]: [cell(DESERT, 173)], [Tile.EXIT]: [EXIT],
-    [Tile.WATER]: [], [Tile.CACTUS]: [SAND, CACTUS], [Tile.ROCK]: [SAND, ROCK], door: [DOOR], npc: [SAND],
-  },
+const PATHS = { [MapId.JERUSALEM]: cell(TOWN, 25), [MapId.JUDEA]: cell(DESERT, 173) }
+// Ground comes in variants picked by position, so open fields get tufts, flowers and dry brush.
+const SURFACES = {
+  [Tile.GRASS]: [...Array(7).fill([cell(TOWN, 0)]), ...Array(2).fill([cell(TOWN, 1)]), [cell(TOWN, 2)]],
+  [Tile.SAND]: [...Array(7).fill([SAND]), ...Array(2).fill([cell(DESERT, 65)]), [SAND, cell(DESERT, 44)]],
 }
+const SAND_COLOR = '#f3cdac'
+const BORDER_DEPTH = 3
+// Water and roofs have no cells: they are painted from their neighbours so shapes join up.
+const FLAT = {
+  [Tile.WALL]: cell(TOWN, 126), [Tile.EXIT]: cell(TOWN, 109), [Tile.FACADE]: cell(CITY, 11), [Tile.WINDOW]: cell(CITY, 3),
+  [Tile.HOUSE_DOOR]: cell(CITY, 7), [Tile.PAVING]: cell(CITY, 5),
+}
+const OBJECTS = { [Tile.TREE]: cell(TOWN, 28), [Tile.CACTUS]: cell(DESERT, 63), [Tile.ROCK]: cell(DESERT, 58) }
 const WATER_SHALLOW = '#6fb8ee'
 const WATER_DEEP = '#4d97dd'
 const WATER_BANK = '#47324b'
@@ -43,6 +37,8 @@ const WATER_RIPPLE = '#8cc9f0'
 const RIPPLE_MS = 700
 const NEIGHBORS = [[0, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]]
 const NPC_ROW = { a: 1, b: 2, c: 3 }
+const VILLAGER_ROWS = [4, 5, 6, 7]
+const CROSS = [[0, -1], [1, 0], [0, 1], [-1, 0]]
 const FACING_COLUMN = { [Key.DOWN]: 0, [Key.UP]: 1, [Key.LEFT]: 2, [Key.RIGHT]: 2 }
 const WALK_FRAMES = [0, 1, 0, 2]
 const KEYS = {
@@ -81,10 +77,38 @@ function drawBox(x, y, width, height) {
   ctx.fillStyle = '#000'
 }
 
-function tileLayers(theme, map, tile, opened) {
-  if (isDoor(map, tile)) return opened.includes(tile) ? theme[Tile.PATH] : theme.door
-  if (isNpc(map, tile)) return theme.npc
-  return theme[tile === Tile.SPAWN ? Tile.PATH : tile]
+const mix = (x, y, salt) => Math.imul(Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(salt, 83492791), 2654435761) >>> 0
+
+function surfaceKind(map, x, y) {
+  const kinds = [1, 2, 3].flatMap((reach) => CROSS.map(([dx, dy]) => tileAt(map, x + dx * reach, y + dy * reach)))
+  return kinds.find((tile) => tile === Tile.GRASS || tile === Tile.SAND) ?? Tile.GRASS
+}
+
+const sprite = (row) => cell(SPRITES, row * SPRITES.columns)
+
+function tileCells(map, tile, x, y, opened) {
+  const variant = mix(x, y, 0)
+  if (isDoor(map, tile)) return [opened.includes(tile) ? PATHS[map] : DOOR]
+  if (tile === Tile.GRASS || tile === Tile.SAND) return SURFACES[tile][variant % SURFACES[tile].length]
+  if (tile === Tile.PATH || tile === Tile.SPAWN) return [PATHS[map]]
+  const ground = SURFACES[surfaceKind(map, x, y)][0]
+  if (isNpc(map, tile)) return [...ground, sprite(NPC_ROW[tile])]
+  if (tile === Tile.VILLAGER || tile === Tile.CHATTER) return [...ground, sprite(VILLAGER_ROWS[variant % VILLAGER_ROWS.length])]
+  if (OBJECTS[tile]) return [...ground, OBJECTS[tile]]
+  return FLAT[tile] ? [FLAT[tile]] : []
+}
+
+// Grass meets sand with a ragged edge, a few pixels deep, instead of a straight seam.
+function drawBorder(map, x, y, left, top) {
+  ctx.fillStyle = SAND_COLOR
+  const edges = [
+    (i, depth) => [left + i, top, 1, depth], (i, depth) => [left + TILE - depth, top + i, depth, 1],
+    (i, depth) => [left + i, top + TILE - depth, 1, depth], (i, depth) => [left, top + i, depth, 1],
+  ]
+  CROSS.forEach(([dx, dy], side) => {
+    if (tileAt(map, x + dx, y + dy) !== Tile.SAND) return
+    for (let i = 0; i < TILE; i++) ctx.fillRect(...edges[side](i, 1 + (mix(x * TILE + i, y, side + 1) % BORDER_DEPTH)))
+  })
 }
 
 function drawWater(map, mapX, mapY, left, top) {
@@ -142,7 +166,6 @@ function drawPlayer(player, x, y) {
 }
 
 function drawMap({ map, opened, player }) {
-  const theme = THEMES[map]
   const rows = rowsOf(map)
   const camX = clamp(player.x - 7, 0, rows[0].length - VIEW_W)
   const camY = loops(map) ? player.y - 4 : clamp(player.y - 4, 0, rows.length - VIEW_H)
@@ -153,10 +176,11 @@ function drawMap({ map, opened, player }) {
       const tile = tileAt(map, mapX, mapY)
       const left = snap((mapX - camX) * TILE)
       const top = snap((mapY - camY) * TILE)
-      tileLayers(theme, map, tile, opened).forEach((layer) => drawCell(layer, left, top))
+      const row = loops(map) ? wrapped(mapY, rows.length) : mapY
+      tileCells(map, tile, mapX, row, opened).forEach((layer) => drawCell(layer, left, top))
+      if (tile === Tile.GRASS) drawBorder(map, mapX, mapY, left, top)
       if (tile === Tile.WATER) drawWater(map, mapX, mapY, left, top)
       if (tile === Tile.ROOF) drawCell(roofCell(map, mapX, mapY), left, top)
-      if (isNpc(map, tile)) drawCell(cell(SPRITES, NPC_ROW[tile] * SPRITES.columns), left, top)
     }
   }
   drawPlayer(player, snap((player.x - camX) * TILE), snap((player.y - camY) * TILE))
