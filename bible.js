@@ -1,129 +1,177 @@
-// DRAFT: verse texts were written from memory (Almeida style) and are NOT verified.
-// Check every entry against the chosen translation before relying on it. Translation: to confirm.
-export const PuzzleType = Object.freeze({ ORDER: 'order', CHOICE: 'choice' })
-export const MapId = Object.freeze({ JERUSALEM: 'jerusalem', JUDEA: 'judea' })
+// DRAFT: verse texts were written from memory (Almeida Revista e Corrigida style) and are NOT verified.
+// Check every entry against a public domain Almeida edition before relying on it.
+export const PuzzleType = Object.freeze({ ORDER: 'order', FIND: 'find', TYPE: 'type' })
+export const MapId = Object.freeze({ EDEN: 'eden' })
 
 export const VERSES = {
-  'Marcos 16:15': 'E disse-lhes: Ide por todo o mundo, pregai o evangelho a toda criatura.',
-  'Atos 1:8': 'mas recebereis a virtude do Espírito Santo, que há de vir sobre vós; e ser-me-eis testemunhas tanto em Jerusalém como em toda a Judeia e Samaria, e até aos confins da terra.',
-  'Atos 2:38': 'E disse-lhes Pedro: Arrependei-vos, e cada um de vós seja batizado em nome de Jesus Cristo, para perdão dos pecados; e recebereis o dom do Espírito Santo.',
-  'Atos 4:12': 'E em nenhum outro há salvação, porque também debaixo do céu nenhum outro nome há, dado entre os homens, pelo qual devamos ser salvos.',
-  'Atos 8:4': 'Mas os que andavam dispersos iam por toda a parte, anunciando a palavra.',
-  'Atos 9:42': 'E isto foi notório por toda a Jope, e muitos creram no Senhor.',
-  'Atos 10:43': 'A este dão testemunho todos os profetas, de que todos os que nele creem receberão a remissão dos pecados pelo seu nome.',
+  'Gênesis 1:3': 'E disse Deus: Haja luz. E houve luz.',
+  'Gênesis 1:7': 'E fez Deus a expansão e fez separação entre as águas que estavam debaixo da expansão e as águas que estavam sobre a expansão. E assim foi.',
+  'Gênesis 1:9': 'E disse Deus: Ajuntem-se as águas debaixo dos céus num lugar; e apareça a porção seca. E assim foi.',
+  'Gênesis 1:16': 'E fez Deus os dois grandes luminares: o luminar maior para governar o dia, e o luminar menor para governar a noite; e fez as estrelas.',
+  'Gênesis 1:21': 'E Deus criou as grandes baleias, e todo réptil de alma vivente que as águas abundantemente produziram conforme as suas espécies, e toda ave de asas conforme a sua espécie. E viu Deus que era bom.',
+  'Gênesis 1:27': 'E criou Deus o homem à sua imagem; à imagem de Deus o criou; macho e fêmea os criou.',
+  'Gênesis 1:31': 'E viu Deus tudo quanto tinha feito, e eis que era muito bom. E foi a tarde e a manhã: o dia sexto.',
+  'Gênesis 2:2': 'E, havendo Deus acabado no dia sétimo a sua obra, que tinha feito, descansou no sétimo dia de toda a sua obra, que tinha feito.',
+  'Gênesis 2:8': 'E plantou o SENHOR Deus um jardim no Éden, da banda do Oriente, e pôs ali o homem que tinha formado.',
+  'Gênesis 2:16-17': 'E ordenou o SENHOR Deus ao homem, dizendo: De toda árvore do jardim comerás livremente, mas da árvore da ciência do bem e do mal, dela não comerás; porque, no dia em que dela comeres, certamente morrerás.',
+  'Gênesis 2:23': 'E disse Adão: Esta é agora osso dos meus ossos e carne da minha carne; esta será chamada varoa, porquanto do varão foi tomada.',
+  'Gênesis 3:7': 'Então, foram abertos os olhos de ambos, e conheceram que estavam nus; e coseram folhas de figueira, e fizeram para si aventais.',
+  'Gênesis 3:14': 'Então, o SENHOR Deus disse à serpente: Porquanto fizeste isso, maldita serás mais que toda besta e mais que todos os animais do campo; sobre o teu ventre andarás e pó comerás todos os dias da tua vida.',
+  'Gênesis 3:15': 'E porei inimizade entre ti e a mulher e entre a tua semente e a sua semente; esta te ferirá a cabeça, e tu lhe ferirás o calcanhar.',
+  'Gênesis 3:16': 'E à mulher disse: Multiplicarei grandemente a tua dor e a tua conceição; com dor terás filhos; e o teu desejo será para o teu marido, e ele te dominará.',
+  'Gênesis 3:19': 'No suor do teu rosto comerás o teu pão, até que te tornes à terra; porque dela foste tomado, porquanto és pó e em pó te tornarás.',
+  'Gênesis 3:21': 'E fez o SENHOR Deus a Adão e a sua mulher túnicas de peles e os vestiu.',
+  'Gênesis 3:23': 'O SENHOR Deus, pois, o lançou fora do jardim do Éden, para lavrar a terra, de que fora tomado.',
+  'Gênesis 3:24': 'E, havendo lançado fora o homem, pôs querubins ao oriente do jardim do Éden e uma espada inflamada que andava ao redor, para guardar o caminho da árvore da vida.',
 }
 
-const quote = (ref) => `${ref}: "${VERSES[ref]}"`
+export const quote = (ref) => `${ref}: "${VERSES[ref]}"`
 
-export const DOOR_LINES = ['A porta está fechada. Fale com quem está por perto.']
-export const DONE_LINES = ['Siga em frente.']
-export const END_LINES = ['Continua...', 'Próximo mapa: Samaria (ainda não construído).']
+export const DONE_LINES = ['Não há mais nada aqui.']
+export const END_LINES = ['Continua...', 'Bíblia: Gênesis 1 a 3.', 'Próximo mapa: ainda não construído.']
 
-// Puzzles by character letter. ORDER: items are listed in the correct order and shuffled on screen.
-// CHOICE: `answer` is the index of the correct item. Event labels are paraphrases, not quotes.
-export const CHAPTERS = {
-  [MapId.JERUSALEM]: {
-    introLines: [
-      'Você recebeu uma missão. Siga a estrada até Jerusalém.',
-      quote('Marcos 16:15'),
-      quote('Atos 1:8'),
-      'Setas: andar. Z: falar e confirmar. X: voltar.',
-    ],
-    exitLines: ['Jerusalém ficou para trás. Próximo destino: Judeia.'],
-    // Flavor lines for villagers. They quote no Scripture and make no claims.
-    chatter: [
-      'Que a paz esteja com você, viajante.',
-      'A estrada segue para o leste, até a cidade.',
-      'Descanse à sombra das árvores antes de seguir.',
-      'Cuidado com os espinhos dos cactos no deserto.',
-      'O mercado da cidade está cheio hoje.',
-    ],
-    puzzles: {
-      a: {
-        type: PuzzleType.ORDER,
-        ref: 'Atos 2:1-41',
-        prompt: 'Coloque os fatos de Pentecostes na ordem.',
-        introLines: ['Uma mulher viu o dia de Pentecostes e quer contar tudo na ordem certa. Ajude-a.'],
-        items: [
-          'Veio do céu um som, como de um vento impetuoso.',
-          'Línguas como de fogo pousaram sobre cada um.',
-          'Todos ficaram cheios do Espírito Santo e passaram a falar outras línguas.',
-          'Pedro se levantou e falou à multidão.',
-          'Cerca de três mil pessoas foram acrescentadas.',
-        ],
-        solvedLines: ['Assim aconteceu o dia de Pentecostes (Atos 2:1-41). A porta se abriu.'],
-      },
-      b: {
-        type: PuzzleType.ORDER,
-        ref: 'Atos 2:38',
-        prompt: 'Monte a resposta de Pedro.',
-        introLines: ['Um homem na multidão quer saber o que fazer. Monte a resposta de Pedro em Atos 2:38.'],
-        items: [
-          'Arrependei-vos,',
-          'e cada um de vós seja batizado em nome de Jesus Cristo,',
-          'para perdão dos pecados;',
-          'e recebereis o dom do Espírito Santo.',
-        ],
-        solvedLines: [quote('Atos 2:38'), 'A porta se abriu.'],
-      },
-      c: {
-        type: PuzzleType.CHOICE,
-        ref: 'Atos 4:12',
-        prompt: 'O que Pedro respondeu?',
-        introLines: ['Alguém pergunta se existe outro nome pelo qual possamos ser salvos. Escolha a resposta de Atos 4:12.'],
-        items: [
-          VERSES['Atos 4:12'],
-          'Há muitos nomes, e cada pessoa pode escolher o seu caminho.',
-          'Basta ser sincero e bom. O nome não importa.',
-        ],
-        answer: 0,
-        solvedLines: [quote('Atos 4:12'), 'A porta se abriu.'],
-      },
-    },
+const FOUND_PAGE = 'Você encontrou uma folha rasgada. Uma ponte se ergueu sobre o rio.'
+const DEEP_RIVER = 'O rio é fundo demais para atravessar aqui.'
+// Doors of the region puzzles. Each one opens with a torn page, and the gate needs all of them.
+const TORN_PAGES = ['A', 'B', 'C', 'D']
+
+// A day stone hides its verse behind a blank. The player looks the passage up in a Bible and types the missing word;
+// then the stone lights up and its verse goes into the notebook.
+const dayStone = (day, ref, passage, sentence, answer, keywords) => ({
+  title: `Pedra do ${day} dia`,
+  ref,
+  puzzle: {
+    type: PuzzleType.TYPE,
+    prompt: `${passage}. ${sentence}`,
+    slots: ['Resposta'],
+    items: [answer],
+    keywords: [keywords],
+    solvedLines: ['A pedra se acendeu.', quote(ref)],
   },
-  [MapId.JUDEA]: {
-    introLines: ['Judeia. Os discípulos foram espalhados, e a palavra foi com eles.'],
-    exitLines: ['Judeia ficou para trás. Próximo destino: Samaria.'],
-    chatter: ['O sol é forte por aqui. Beba água.', 'Que a paz esteja com você, viajante.'],
+})
+
+// Landmarks give puzzles, keyed by their lowercase letter; the uppercase letter is the door they open.
+// Readings are stones the player reads into the notebook. A puzzle only starts once its `needs` are
+// read (reading keys) or opened (door letters). A landmark without a puzzle type opens its door as soon as its needs are met. ORDER items are listed in the correct order and shuffled
+// on screen. FIND steps list the items to pick, step by step, in any order within a step. TYPE items are filled in order by
+// typing one of the item's keywords (lowercase, no accents); the slot shows the item once it is right.
+// Event labels are paraphrases, not quotes.
+export const CHAPTERS = {
+  [MapId.EDEN]: {
+    introLines: [
+      'Num país onde a fé é proibida, as Bíblias são queimadas e os cristãos se reúnem escondidos.',
+      'Um irmão idoso deixou com você uma Bíblia vazia. Restaram a capa e a costura. Todas as folhas foram arrancadas.',
+      'Você decidiu reconstruí-la, folha por folha, para que a palavra volte a ser anunciada.',
+      'A primeira parte começa num jardim.',
+      quote('Gênesis 2:8'),
+      'Setas: andar. Z: ler e confirmar. X: voltar. C: caderno.',
+    ],
+    exitLines: ['Você deixou o jardim pelo oriente.'],
+    pages: TORN_PAGES,
+    readings: {
+      1: dayStone('primeiro', 'Gênesis 1:3', 'Gênesis 1:3-5', 'No primeiro dia, Deus disse: Haja ___.', 'Luz', ['luz']),
+      2: dayStone('segundo', 'Gênesis 1:7', 'Gênesis 1:6-8', 'No segundo dia, Deus separou as águas e chamou a separação de ___.', 'Céus', [
+        'ceus', 'ceu', 'firmamento', 'expansao',
+      ]),
+      3: dayStone('terceiro', 'Gênesis 1:9', 'Gênesis 1:9-13', 'No terceiro dia, apareceu a porção seca, que Deus chamou de ___.', 'Terra', ['terra']),
+      4: dayStone('quarto', 'Gênesis 1:16', 'Gênesis 1:14-19', 'No quarto dia, Deus fez o sol, a lua e as ___.', 'Estrelas', ['estrelas', 'estrela']),
+      5: dayStone('quinto', 'Gênesis 1:21', 'Gênesis 1:20-23', 'No quinto dia, as águas se encheram de seres vivos, e o céu, de ___.', 'Aves', [
+        'aves', 'ave', 'passaros', 'passaro',
+      ]),
+      6: dayStone('sexto', 'Gênesis 1:27', 'Gênesis 1:24-31', 'No sexto dia, Deus fez os animais da terra e criou o ___ à sua imagem.', 'Homem', [
+        'homem', 'humano', 'humanidade', 'adao',
+      ]),
+      7: dayStone('sétimo', 'Gênesis 2:2', 'Gênesis 2:1-3', 'No sétimo dia, Deus acabou a sua obra e ___.', 'Descansou', [
+        'descansou', 'descanso', 'repousou', 'cessou',
+      ]),
+      O: { title: 'A ordem de Deus', ref: 'Gênesis 2:16-17' },
+      S: { title: 'O que foi dito à serpente', ref: 'Gênesis 3:14' },
+      M: { title: 'O que foi dito à mulher', ref: 'Gênesis 3:16' },
+      H: { title: 'O que foi dito ao homem', ref: 'Gênesis 3:19' },
+    },
     puzzles: {
       a: {
-        type: PuzzleType.ORDER,
-        ref: 'Atos 7:58-8:4',
-        prompt: 'Coloque os fatos na ordem.',
-        introLines: ['Um homem fugiu de Jerusalém e quer lembrar o que aconteceu. Ajude-o a contar na ordem certa.'],
-        items: [
-          'Estêvão foi apedrejado, e Saulo consentia na sua morte.',
-          'Levantou-se grande perseguição contra a igreja em Jerusalém.',
-          'Todos, menos os apóstolos, foram dispersos pelas terras da Judeia e de Samaria.',
-          'Os que andavam dispersos iam por toda a parte anunciando a palavra.',
-        ],
-        solvedLines: [quote('Atos 8:4'), 'A porta se abriu.'],
+        needs: ['1', '2', '3', '4', '5', '6', '7'],
+        missingLines: (count) => [`Sete pedestais formam um círculo. ${count} deles ainda estão apagados.`],
+        closedLines: [DEEP_RIVER],
+        solvedLines: ['Os sete pedestais se acenderam.', quote('Gênesis 1:31'), FOUND_PAGE],
       },
       b: {
-        type: PuzzleType.CHOICE,
-        ref: 'Atos 9:42',
-        prompt: 'O que aconteceu depois?',
-        introLines: ['Uma mulher de Jope conta que Pedro levantou Tabita, uma discípula. Escolha o que aconteceu depois, segundo Atos 9:42.'],
+        type: PuzzleType.ORDER,
+        needs: [],
+        closedLines: [DEEP_RIVER],
+        prompt: 'Ponha o relato de Gênesis 2 na ordem.',
+        introLines: ['Uma pedra grande conta como o homem e a mulher foram feitos, mas as frases estão fora de ordem.'],
         items: [
-          VERSES['Atos 9:42'],
-          'Os moradores de Jope mandaram Pedro embora da cidade.',
-          'Ninguém em Jope ficou sabendo do que aconteceu.',
+          'Deus formou o homem do pó da terra.',
+          'Soprou em seus narizes o fôlego da vida.',
+          'Pôs o homem no jardim do Éden.',
+          'O homem deu nome aos animais.',
+          'Fez cair um sono pesado sobre o homem.',
+          'Da costela, formou a mulher.',
         ],
-        answer: 0,
-        solvedLines: [quote('Atos 9:42'), 'A porta se abriu.'],
+        solvedLines: [quote('Gênesis 2:23'), FOUND_PAGE],
       },
       c: {
-        type: PuzzleType.ORDER,
-        ref: 'Atos 10:43',
-        prompt: 'Monte o testemunho de Pedro.',
-        introLines: ['Em Cesareia, um centurião chamado Cornélio quer ouvir Pedro. Monte as palavras dele em Atos 10:43.'],
+        type: PuzzleType.FIND,
+        needs: ['O'],
+        missingLines: () => ['Junto à árvore, falas estão gravadas no chão, mas você não tem com o que compará-las.'],
+        closedLines: [DEEP_RIVER],
+        prompt: 'Deus disse: "De toda árvore do jardim comerás livremente, mas da árvore da ciência do bem e do mal, dela não comerás; porque, no dia em que dela comeres, certamente morrerás."',
+        introLines: ['No meio do jardim estão as árvores. Junto a elas, as falas da serpente e da mulher estão gravadas no chão.'],
         items: [
-          'A este dão testemunho todos os profetas,',
-          'de que todos os que nele creem',
-          'receberão a remissão dos pecados',
-          'pelo seu nome.',
+          'Serpente: "Não comereis de toda árvore do jardim?"',
+          'Mulher: "Do fruto das árvores do jardim comeremos"',
+          'Mulher: "Não comereis dele"',
+          'Mulher: "nem nele tocareis"',
+          'Serpente: "Certamente não morrereis."',
+          'Serpente: "no dia em que dele comerdes"',
         ],
-        solvedLines: [quote('Atos 10:43'), 'A porta se abriu.'],
+        steps: [{ label: 'Marque cada trecho que mudou.', answers: [0, 1, 3, 4] }],
+        solvedLines: ['Você encontrou cada mudança.', quote('Gênesis 3:7'), FOUND_PAGE],
+      },
+      d: {
+        type: PuzzleType.FIND,
+        needs: ['S', 'M', 'H'],
+        missingLines: (count) => ['Uma pedra rachada pergunta o que foi dito a cada um.', `Você ainda não conhece ${count} das respostas.`],
+        closedLines: [DEEP_RIVER],
+        prompt: 'Separe as sentenças de Gênesis 3:14-19.',
+        introLines: ['Uma pedra rachada pergunta: o que foi dito a cada um?'],
+        items: [
+          'Andará sobre o ventre.',
+          'Comerá pó todos os dias da vida.',
+          'Terá dor ao dar à luz filhos.',
+          'O desejo será para o marido.',
+          'Comerá o pão no suor do rosto.',
+          'Tornará ao pó.',
+        ],
+        steps: [
+          { label: 'O que foi dito à serpente?', answers: [0, 1] },
+          { label: 'O que foi dito à mulher?', answers: [2, 3] },
+          { label: 'O que foi dito ao homem?', answers: [4, 5] },
+        ],
+        solvedLines: [quote('Gênesis 3:23'), FOUND_PAGE],
+      },
+      e: {
+        type: PuzzleType.ORDER,
+        needs: TORN_PAGES,
+        missingLines: () => ['Os querubins guardam o caminho.'],
+        closedLines: ['Uma espada inflamada guarda a passagem.'],
+        prompt: 'Junte as quatro folhas na ordem do relato.',
+        introLines: [quote('Gênesis 3:24')],
+        items: [
+          '"No princípio, criou Deus os céus e a terra..."',
+          '"E formou o SENHOR Deus o homem do pó da terra..."',
+          '"Ora, a serpente era mais astuta que todas as alimárias do campo..."',
+          '"E ouviram a voz do SENHOR Deus, que passeava no jardim..."',
+        ],
+        bible: ['Gênesis 1', 'Gênesis 2', 'Gênesis 3'],
+        solvedLines: [
+          'As quatro folhas se encaixaram. Gênesis 1 a 3 voltou para a Bíblia.',
+          quote('Gênesis 3:21'),
+          quote('Gênesis 3:15'),
+          'O caminho para o oriente está aberto.',
+        ],
       },
     },
   },

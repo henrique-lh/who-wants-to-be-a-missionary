@@ -1,5 +1,8 @@
-import { END_LINES, MapId, PuzzleType } from './bible.js'
-import { Key, Mode, Tile, initialState, isDoor, isNpc, loops, puzzleOf, rowsOf, tileAt, update, visibleItems, wrapped } from './game.js'
+import { CHAPTERS, END_LINES, PuzzleType, quote } from './bible.js'
+import {
+  Key, Mode, Tile, currentStep, initialState, interactable, isDoor, isNpc, isReading, isTyping, pagesOf, puzzleOf, puzzlesOf, readingsOf, rowsOf, tileAt, typeText,
+  update, visibleItems,
+} from './game.js'
 
 const SCALE = 6
 const STEP_MS = 350
@@ -7,28 +10,33 @@ const TILE = 16
 const VIEW_W = 15
 const VIEW_H = 10
 const LINE = 9
-const sheet = (src, columns) => ({ image: Object.assign(new Image(), { src }), columns })
+// `gap` is the margin between cells in the sheet.
+const sheet = (src, columns, gap = 0) => ({ image: Object.assign(new Image(), { src }), columns, gap })
 const TOWN = sheet('assets/town.png', 12)
-const DESERT = sheet('assets/desert.png', 18)
+const RPG = sheet('assets/rpg.png', 57, 1)
 const SPRITES = sheet('assets/sprites.png', 9)
-const CITY = sheet('assets/city.png', 4)
 const cell = (from, index) => ({ sheet: from, index })
-const SAND = cell(DESERT, 64)
-const DOOR = cell(TOWN, 85)
-const PATHS = { [MapId.JERUSALEM]: cell(TOWN, 25), [MapId.JUDEA]: cell(DESERT, 173) }
-// Ground comes in variants picked by position, so open fields get tufts, flowers and dry brush.
+const rpg = (column, row) => cell(RPG, row * RPG.columns + column)
+const GRASS = cell(TOWN, 0)
+const PATH = cell(TOWN, 25)
+const EXIT = cell(TOWN, 109)
+const DAY_STONE = rpg(46, 16)
+const SLAB = rpg(44, 17)
+// Ground comes in variants picked by position, so the garden gets tufts, flowers and fallen leaves.
 const SURFACES = {
-  [Tile.GRASS]: [...Array(7).fill([cell(TOWN, 0)]), ...Array(2).fill([cell(TOWN, 1)]), [cell(TOWN, 2)]],
-  [Tile.SAND]: [...Array(7).fill([SAND]), ...Array(2).fill([cell(DESERT, 65)]), [SAND, cell(DESERT, 44)]],
+  [Tile.GRASS]: [
+    ...Array(24).fill([GRASS]), [cell(TOWN, 1)], [cell(TOWN, 2)], [GRASS, rpg(29, 9)], [GRASS, rpg(30, 9)], [GRASS, rpg(31, 9)],
+    [GRASS, rpg(28, 9)], [GRASS, rpg(43, 23)], [GRASS, rpg(22, 10)],
+  ],
+  [Tile.CRACKED]: [[rpg(6, 0)]],
 }
-const SAND_COLOR = '#f3cdac'
-const BORDER_DEPTH = 3
-// Water and roofs have no cells: they are painted from their neighbours so shapes join up.
-const FLAT = {
-  [Tile.WALL]: cell(TOWN, 126), [Tile.EXIT]: cell(TOWN, 109), [Tile.FACADE]: cell(CITY, 11), [Tile.WINDOW]: cell(CITY, 3),
-  [Tile.HOUSE_DOOR]: cell(CITY, 7), [Tile.PAVING]: cell(CITY, 5),
+// Objects stand on the ground around them, in variants picked by position.
+const OBJECTS = {
+  [Tile.TREE]: [rpg(13, 9), rpg(15, 9), rpg(16, 9), rpg(18, 9), rpg(13, 9), rpg(14, 9), rpg(19, 9), rpg(24, 9)],
+  [Tile.ROCK]: [rpg(55, 21), rpg(54, 22), rpg(54, 19)],
+  [Tile.DEAD_TREE]: [rpg(27, 9)],
 }
-const OBJECTS = { [Tile.TREE]: cell(TOWN, 28), [Tile.CACTUS]: cell(DESERT, 63), [Tile.ROCK]: cell(DESERT, 58) }
+const LANDMARKS = { a: rpg(48, 16), b: rpg(50, 16), c: rpg(23, 9), d: rpg(50, 16) }
 const WATER_SHALLOW = '#6fb8ee'
 const WATER_DEEP = '#4d97dd'
 const WATER_BANK = '#47324b'
@@ -36,19 +44,45 @@ const WATER_FOAM = '#a8dcf7'
 const WATER_RIPPLE = '#8cc9f0'
 const RIPPLE_MS = 700
 const NEIGHBORS = [[0, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]]
-const NPC_ROW = { a: 1, b: 2, c: 3 }
-const VILLAGER_ROWS = [4, 5, 6, 7]
-const BREATH_MS = 500
-const NEAR_TILES = 2.5
-const ARROW_FILL = '#ffd54f'
-const ARROW_OUTLINE = '#47324b'
-const ARROW = ['ooooooo', 'oyyyyyo', '.oyyyo.', '..oyo..', '...o...']
+// Hand-drawn pixels, one character per pixel. '.' is transparent.
+const PIXEL_COLORS = {
+  o: '#47324b', y: '#ffd54f', w: '#ffffff', s: '#f0c8a0', r: '#e5533d', l: '#d8e2ee', b: '#7a5230', g: '#5d7a2e', p: '#c8925a',
+}
+const CHERUB = [
+  '................', '.yy..........yy.', 'yyyy..oooo..yyyy', 'yyyyyossssoyyyyy', '.yyyyossssoyyyy.', '.yyyyoossooyyyy.',
+  '..yyyowwwwoyyy..', '..yyowwwwwwoyy..', '...yowwwwwwoy...', '....owwwwwwo....', '....owwwwwwo....', '...owwwwwwwwo...',
+  '...owwwwwwwwo...', '...oooooooooo...', '....oo....oo....',
+]
+const FLAMING_SWORD = [
+  '.......rr.......', '......ryyr......', '.....ryllyr.....', '......rllr......', '.....ryllyr.....', '......rllr......',
+  '.....ryllyr.....', '......rllr......', '.......ll.......', '.......ll.......', '....oooooooo....', '.......oo.......',
+  '.......oo.......', '......oyyo......', '.......oo.......',
+]
+const THORNS = [
+  '................', '................', '...b......b.....', '.b..b..b..b..b..', '..bbgb.b.bgbb...', 'b..bggbbbggb..b.',
+  '.b.gbgbgbgbgb.b.', '..bbgbbgbbgbbb..', '.bgbbggbggbbgb..', 'bggbgbbgbbgbggb.', '.gbbgbgbgbgbbg..', '..bgbbgbbgbgb...',
+  '...bbgbbgbbb....',
+]
+const CRACKS = [
+  '................', '..b.............', '...b.......b....', '...bb.....b.....', '.....b...b......', '......bbb.......',
+  '......b.........', '.....b..........', '....b.......b...', '............b...', '...........b.b..', '..........b...b.',
+]
+// A lit mark on a day stone that was filled in, and on the pedestals once all seven are.
+const LIT = [...Array(8).fill(''), '........yy......', '.......ywwy.....', '.......ywwy.....', '........yy......']
+// Planks run across the river, so a run of bridge tiles repeats seamlessly.
+const BRIDGE = [
+  'oooooooooooooooo', 'bbbbbbbbbbbbbbbb', 'oooooooooooooooo', ...Array(9).fill('pppopppopppopppo'), 'bbbobbbobbbobbbo',
+  'oooooooooooooooo', 'bbbbbbbbbbbbbbbb', 'oooooooooooooooo',
+]
+// A bridge lays its planks one pixel column at a time, west to east, the first time it comes into view.
+const BUILD_MS_PER_COLUMN = 30
 const CROSS = [[0, -1], [1, 0], [0, 1], [-1, 0]]
 const FACING_COLUMN = { [Key.DOWN]: 0, [Key.UP]: 1, [Key.LEFT]: 2, [Key.RIGHT]: 2 }
 const WALK_FRAMES = [0, 1, 0, 2]
 const KEYS = {
   ArrowUp: Key.UP, w: Key.UP, ArrowDown: Key.DOWN, s: Key.DOWN, ArrowLeft: Key.LEFT, a: Key.LEFT,
-  ArrowRight: Key.RIGHT, d: Key.RIGHT, z: Key.CONFIRM, Enter: Key.CONFIRM, x: Key.CANCEL, Escape: Key.CANCEL,
+  ArrowRight: Key.RIGHT, d: Key.RIGHT, z: Key.CONFIRM, Enter: Key.CONFIRM, x: Key.CANCEL, Escape: Key.CANCEL, c: Key.NOTEBOOK,
+  Tab: Key.NOTEBOOK, Backspace: Key.ERASE,
 }
 
 const ctx = document.querySelector('canvas').getContext('2d')
@@ -86,62 +120,45 @@ const mix = (x, y, salt) => Math.imul(Math.imul(x, 73856093) ^ Math.imul(y, 1934
 
 function surfaceKind(map, x, y) {
   const kinds = [1, 2, 3].flatMap((reach) => CROSS.map(([dx, dy]) => tileAt(map, x + dx * reach, y + dy * reach)))
-  return kinds.find((tile) => tile === Tile.GRASS || tile === Tile.SAND) ?? Tile.GRASS
+  return kinds.find((tile) => tile === Tile.GRASS || tile === Tile.CRACKED) ?? Tile.GRASS
 }
 
-const sprite = (row) => cell(SPRITES, row * SPRITES.columns)
-const isPerson = (map, tile) => isNpc(map, tile) || tile === Tile.VILLAGER || tile === Tile.CHATTER
-const talks = (map, tile, opened) => tile === Tile.CHATTER || (isNpc(map, tile) && !opened.includes(tile.toUpperCase()))
+// A door with water above or below is a river crossing; the other one is the gate.
+const inRiver = (map, x, y) => tileAt(map, x, y - 1) === Tile.WATER || tileAt(map, x, y + 1) === Tile.WATER
+const isWet = (map, x, y) => {
+  const tile = tileAt(map, x, y)
+  return tile === Tile.WATER || (isDoor(map, tile) && inRiver(map, x, y))
+}
+const variantOf = (cells, x, y) => cells[mix(x, y, 0) % cells.length]
 
 function tileCells(map, tile, x, y, opened) {
-  const variant = mix(x, y, 0)
-  if (isDoor(map, tile)) return [opened.includes(tile) ? PATHS[map] : DOOR]
-  if (tile === Tile.GRASS || tile === Tile.SAND) return SURFACES[tile][variant % SURFACES[tile].length]
-  if (tile === Tile.PATH || tile === Tile.SPAWN) return [PATHS[map]]
+  if (tile === Tile.WATER) return []
+  if (isDoor(map, tile)) return inRiver(map, x, y) ? [] : [PATH]
+  if (SURFACES[tile]) return variantOf(SURFACES[tile], x, y)
+  if (tile === Tile.PATH || tile === Tile.SPAWN) return [PATH]
+  if (tile === Tile.EXIT) return [EXIT]
   const ground = SURFACES[surfaceKind(map, x, y)][0]
-  if (isPerson(map, tile)) return ground
-  if (OBJECTS[tile]) return [...ground, OBJECTS[tile]]
-  return FLAT[tile] ? [FLAT[tile]] : []
+  if (OBJECTS[tile]) return [...ground, variantOf(OBJECTS[tile], x, y)]
+  if (LANDMARKS[tile]) return [...ground, LANDMARKS[tile]]
+  if (isReading(map, tile)) return [...ground, /\d/.test(tile) ? DAY_STONE : SLAB]
+  return ground
 }
 
-// People rise one pixel on every breath, out of step with each other, so the map is never still.
-// A bobbing arrow marks anyone nearby who has something to say.
-const isNear = (map, player, x, y) => {
-  const height = rowsOf(map).length
-  const dy = loops(map) ? wrapped(player.y - y + height / 2, height) - height / 2 : player.y - y
-  return Math.hypot(player.x - x, dy) <= NEAR_TILES
-}
+const isLit = ({ map, read, opened }, tile) =>
+  (isReading(map, tile) && Boolean(readingsOf(map)[tile].puzzle) && read.includes(tile))
+  || (isNpc(map, tile) && !puzzlesOf(map)[tile].type && opened.includes(tile.toUpperCase()))
 
-function drawPerson(map, tile, x, y, left, top, opened, player) {
-  const variant = mix(x, y, 0)
-  const now = performance.now()
-  const breath = Math.floor(now / BREATH_MS + (variant % 4)) % 2
-  drawCell(sprite(isNpc(map, tile) ? NPC_ROW[tile] : VILLAGER_ROWS[variant % VILLAGER_ROWS.length]), left, top - breath)
-  if (!talks(map, tile, opened) || !isNear(map, player, x, y)) return
-  const arrowTop = top - 7 + snap(Math.sin(now / 230 + (variant % 7)) * 2)
-  ARROW.forEach((line, row) => [...line].forEach((pixel, column) => {
-    if (pixel === '.') return
-    ctx.fillStyle = pixel === 'o' ? ARROW_OUTLINE : ARROW_FILL
-    ctx.fillRect(left + 4 + column, arrowTop + row, 1, 1)
+function drawPixels(pattern, left, top, width = Infinity) {
+  pattern.forEach((line, row) => [...line].forEach((pixel, column) => {
+    if (pixel === '.' || column >= width) return
+    ctx.fillStyle = PIXEL_COLORS[pixel]
+    ctx.fillRect(left + column, top + row, 1, 1)
   }))
-}
-
-// Grass meets sand with a ragged edge, a few pixels deep, instead of a straight seam.
-function drawBorder(map, x, y, left, top) {
-  ctx.fillStyle = SAND_COLOR
-  const edges = [
-    (i, depth) => [left + i, top, 1, depth], (i, depth) => [left + TILE - depth, top + i, depth, 1],
-    (i, depth) => [left + i, top + TILE - depth, 1, depth], (i, depth) => [left, top + i, depth, 1],
-  ]
-  CROSS.forEach(([dx, dy], side) => {
-    if (tileAt(map, x + dx, y + dy) !== Tile.SAND) return
-    for (let i = 0; i < TILE; i++) ctx.fillRect(...edges[side](i, 1 + (mix(x * TILE + i, y, side + 1) % BORDER_DEPTH)))
-  })
 }
 
 function drawWater(map, mapX, mapY, left, top) {
   const [up, right, down, west, northWest, northEast, southEast, southWest] = NEIGHBORS.map(
-    ([dx, dy]) => tileAt(map, mapX + dx, mapY + dy) !== Tile.WATER,
+    ([dx, dy]) => !isWet(map, mapX + dx, mapY + dy),
   )
   const paint = (color, [x, y, width, height]) => {
     ctx.fillStyle = color
@@ -169,17 +186,10 @@ function drawWater(map, mapX, mapY, left, top) {
   corners.filter(([diagonal, a, b]) => diagonal && !a && !b).forEach(([, , , [x, y]]) => paint(WATER_BANK, [x, y, 1, 1]))
 }
 
-function roofCell(map, mapX, mapY) {
-  const isRoof = (dx, dy) => tileAt(map, mapX + dx, mapY + dy) === Tile.ROOF
-  const column = !isRoof(-1, 0) ? 0 : !isRoof(1, 0) ? 2 : 1
-  const row = !isRoof(0, -1) ? 0 : !isRoof(0, 1) ? 2 : 1
-  return cell(CITY, row * 4 + column)
-}
-
 function drawCell({ sheet: from, index }, x, y) {
   const column = index % from.columns
   const row = Math.floor(index / from.columns)
-  ctx.drawImage(from.image, column * TILE, row * TILE, TILE, TILE, x, y, TILE, TILE)
+  ctx.drawImage(from.image, column * (TILE + from.gap), row * (TILE + from.gap), TILE, TILE, x, y, TILE, TILE)
 }
 
 function drawPlayer(player, x, y) {
@@ -193,10 +203,20 @@ function drawPlayer(player, x, y) {
   ctx.restore()
 }
 
-function drawMap({ map, opened, player }) {
+const runIndex = (map, tile, x, y) => (tileAt(map, x - 1, y) === tile ? 1 + runIndex(map, tile, x - 1, y) : 0)
+let builtAt = {}
+
+function drawBridge(map, tile, x, y, left, top) {
+  const now = performance.now()
+  if (!builtAt[tile]) builtAt = { ...builtAt, [tile]: now }
+  drawPixels(BRIDGE, left, top, (now - builtAt[tile]) / BUILD_MS_PER_COLUMN - runIndex(map, tile, x, y) * TILE)
+}
+
+function drawMap(state) {
+  const { map, opened, player } = state
   const rows = rowsOf(map)
   const camX = clamp(player.x - 7, 0, rows[0].length - VIEW_W)
-  const camY = loops(map) ? player.y - 4 : clamp(player.y - 4, 0, rows.length - VIEW_H)
+  const camY = clamp(player.y - 4, 0, rows.length - VIEW_H)
   for (let ty = 0; ty <= VIEW_H; ty++) {
     for (let tx = 0; tx <= VIEW_W; tx++) {
       const mapX = Math.floor(camX) + tx
@@ -204,30 +224,82 @@ function drawMap({ map, opened, player }) {
       const tile = tileAt(map, mapX, mapY)
       const left = snap((mapX - camX) * TILE)
       const top = snap((mapY - camY) * TILE)
-      const row = loops(map) ? wrapped(mapY, rows.length) : mapY
-      tileCells(map, tile, mapX, row, opened).forEach((layer) => drawCell(layer, left, top))
-      if (tile === Tile.GRASS) drawBorder(map, mapX, mapY, left, top)
-      if (isPerson(map, tile)) drawPerson(map, tile, mapX, row, left, top, opened, player)
-      if (tile === Tile.WATER) drawWater(map, mapX, mapY, left, top)
-      if (tile === Tile.ROOF) drawCell(roofCell(map, mapX, mapY), left, top)
+      if (isWet(map, mapX, mapY)) drawWater(map, mapX, mapY, left, top)
+      tileCells(map, tile, mapX, mapY, opened).forEach((layer) => drawCell(layer, left, top))
+      if (isDoor(map, tile) && inRiver(map, mapX, mapY) && opened.includes(tile)) drawBridge(map, tile, mapX, mapY, left, top)
+      if (tile === Tile.CRACKED && mix(mapX, mapY, 1) % 2) drawPixels(CRACKS, left, top)
+      if (tile === Tile.THORNS) drawPixels(THORNS, left, top)
+      if (isLit(state, tile)) drawPixels(LIT, left, top)
+      if (isNpc(map, tile) && !LANDMARKS[tile]) drawPixels(CHERUB, left, top)
+      if (isDoor(map, tile) && !inRiver(map, mapX, mapY) && !opened.includes(tile)) drawPixels(FLAMING_SWORD, left, top)
     }
   }
   drawPlayer(player, snap((player.x - camX) * TILE), snap((player.y - camY) * TILE))
 }
+
+// A small box at the right edge names the buttons for what the player can do now.
+function drawHint(text, top) {
+  const width = Math.ceil(ctx.measureText(text).width) + 12
+  drawBox(236 - width, top, width, 14)
+  ctx.fillText(text, 242 - width, top + 4)
+}
+
+const HINTS = {
+  [PuzzleType.ORDER]: 'Z: escolher  X: sair  C: caderno',
+  [PuzzleType.FIND]: 'Z: escolher  X: sair  C: caderno',
+  [PuzzleType.TYPE]: 'Enter: gravar  Tab: caderno  Esc: sair',
+}
+
+function drawPrompt(state) {
+  const tile = interactable(state)
+  if (tile) drawHint(isReading(state.map, tile) ? 'Z: ler' : 'Z: examinar', 142)
+}
+
+const drawSlots = ({ slots, items }, { picked, typed }, top) =>
+  slots.reduce((y, slot, index) => drawText(
+    picked.includes(index) ? `✓ ${slot}: ${items[index]}` : index === picked.length ? `> ${slot}: ${typed}_` : `· ${slot}:`,
+    10, y + 2, 220,
+  ), top)
+
+const stepLine = ({ label, answers }, picked) => `${label} Faltam ${answers.filter((answer) => !picked.includes(answer)).length}.`
 
 function drawPuzzle(state) {
   const { puzzle } = state
   const definition = puzzleOf(state)
   drawBox(4, 4, 232, 152)
   const afterPrompt = drawText(definition.prompt, 10, 10, 220)
-  const afterPicked = definition.type === PuzzleType.ORDER && puzzle.picked.length
-    ? drawText(`Montado: ${puzzle.picked.map((item) => definition.items[item]).join(' ')}`, 10, afterPrompt + 2, 220)
-    : afterPrompt
+  if (definition.type === PuzzleType.TYPE) drawSlots(definition, puzzle, afterPrompt + 2)
+  else drawChoices(definition, puzzle, afterPrompt)
+  if (puzzle.wrong) drawText('Não é isso.', 10, 140, 220)
+  drawHint(HINTS[definition.type], 140)
+}
+
+function drawChoices(definition, puzzle, afterPrompt) {
+  const afterPicked = definition.type === PuzzleType.ORDER
+    ? puzzle.picked.length ? drawText(`Montado: ${puzzle.picked.map((item) => definition.items[item]).join(' ')}`, 10, afterPrompt + 2, 220) : afterPrompt
+    : drawText(stepLine(currentStep(definition, puzzle.picked), puzzle.picked), 10, afterPrompt + 2, 220)
   visibleItems(puzzle).reduce(
     (top, item, row) => drawText(`${row === puzzle.cursor ? '>' : ' '} ${definition.items[item]}`, 10, top + 2, 220),
     afterPicked + 2,
   )
-  if (puzzle.wrong) drawText(`Não é isso. Releia ${definition.ref}.`, 10, 140, 220)
+}
+
+const NOTEBOOK_ROWS = 5
+
+function drawNotebook(state) {
+  const { map, read, bible, notebook } = state
+  const readings = readingsOf(map)
+  drawBox(4, 4, 232, 152)
+  const afterTitle = drawText('Caderno (C fecha)', 10, 10, 220)
+  const afterPages = drawText(`Folhas rasgadas: ${pagesOf(state)} de ${CHAPTERS[map].pages.length}`, 10, afterTitle + 2, 220)
+  const afterBible = drawText(`Bíblia: ${bible.length ? bible.join(', ') : 'nenhuma página ainda'}`, 10, afterPages, 220)
+  if (!read.length) return drawText('Caderno vazio.', 10, afterBible + 6, 220)
+  const first = clamp(notebook.cursor - 2, 0, Math.max(0, read.length - NOTEBOOK_ROWS))
+  const afterList = read.slice(first, first + NOTEBOOK_ROWS).reduce(
+    (top, key, row) => drawText(`${first + row === notebook.cursor ? '>' : ' '} ${readings[key].title}`, 10, top, 220),
+    afterBible + 6,
+  )
+  drawText(quote(readings[read[notebook.cursor]].ref), 10, afterList + 6, 220)
 }
 
 function draw(state) {
@@ -239,10 +311,13 @@ function draw(state) {
     return
   }
   drawMap(state)
+  if (state.mode === Mode.MAP) drawPrompt(state)
   if (state.mode === Mode.PUZZLE) drawPuzzle(state)
+  if (state.mode === Mode.NOTEBOOK) drawNotebook(state)
   if (state.mode === Mode.DIALOGUE) {
-    drawBox(4, 108, 232, 48)
-    drawText(state.dialogue.lines[0], 10, 114, 220)
+    drawBox(4, 100, 232, 56)
+    drawText(state.dialogue.lines[0], 10, 106, 220)
+    drawHint('Z: continuar', 86)
   }
 }
 
@@ -258,21 +333,26 @@ function frame(now) {
   const elapsed = Math.min(now - lastFrame, MAX_FRAME_MS)
   lastFrame = now
   const direction = held.at(-1)
-  if (direction && state.mode === Mode.MAP) state = update(state, direction, elapsed / STEP_MS)
+  if (direction && state.mode === Mode.MAP) {
+    facing = direction
+    state = update(state, direction, elapsed / STEP_MS)
+  }
   draw(state)
   requestAnimationFrame(frame)
 }
 
 addEventListener('keydown', (event) => {
+  if (isTyping(state) && event.key.length === 1) {
+    event.preventDefault()
+    state = typeText(state, event.key)
+    return
+  }
   const key = KEYS[event.key]
   if (!key) return
   event.preventDefault()
-  if (event.repeat) return
+  if (event.repeat && key !== Key.ERASE) return
   const isDirection = DIRECTIONS.includes(key)
-  if (isDirection) {
-    held = [...held.filter((heldKey) => heldKey !== key), key]
-    facing = key
-  }
+  if (isDirection) held = [...held.filter((heldKey) => heldKey !== key), key]
   if (!isDirection || state.mode !== Mode.MAP) state = update(state, key)
 })
 addEventListener('keyup', (event) => {

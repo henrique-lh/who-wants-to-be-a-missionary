@@ -1,106 +1,134 @@
 import assert from 'node:assert/strict'
-import { CHAPTERS, MapId, PuzzleType, VERSES } from './bible.js'
-import { Key, Mode, Tile, expectedIndex, initialState, isDoor, isNpc, loops, puzzleOf, rowsOf, tileAt, update, visibleItems } from './game.js'
+import { CHAPTERS, MapId, VERSES } from './bible.js'
+import { Key, Mode, currentStep, initialState, interactable, isDoor, isNpc, isReading, pagesOf, puzzleOf, rowsOf, typeText, update, visibleItems } from './game.js'
 
-const MAP_ORDER = [MapId.JERUSALEM, MapId.JUDEA]
-
-for (const map of MAP_ORDER) {
-  const rows = rowsOf(map)
-  const puzzles = CHAPTERS[map].puzzles
-  const tiles = rows.join('')
-  assert(rows.every((row) => row.length === rows[0].length), `${map}: map rows must have equal length`)
-  for (const npc of [...tiles].filter((tile) => isNpc(map, tile))) {
-    assert(tiles.includes(npc.toUpperCase()), `${map}: door for ${npc}`)
-  }
-  assert.equal([...tiles].filter((tile) => isDoor(map, tile)).length, Object.keys(puzzles).length)
-  for (const { type, ref, items } of Object.values(puzzles)) {
-    if (type === PuzzleType.ORDER && VERSES[ref]) assert(VERSES[ref].includes(items.join(' ')), `${ref} chunks match verse`)
-  }
+const map = MapId.EDEN
+const rows = rowsOf(map)
+const { puzzles, readings } = CHAPTERS[map]
+const tiles = rows.join('')
+assert(rows.every((row) => row.length === rows[0].length), 'map rows must have equal length')
+for (const letter of Object.keys(puzzles)) {
+  assert(tiles.includes(letter), `landmark ${letter} on the map`)
+  assert(tiles.includes(letter.toUpperCase()), `door for ${letter}`)
 }
-
-// the first map loops top to bottom through open ground, the others are closed
-const height = rowsOf(MapId.JERUSALEM).length
-assert.equal(loops(MapId.JERUSALEM), true)
-assert.equal(loops(MapId.JUDEA), false)
-assert.equal(tileAt(MapId.JERUSALEM, 36, -1), tileAt(MapId.JERUSALEM, 36, height - 1))
-assert.notEqual(tileAt(MapId.JERUSALEM, 36, 0), Tile.WALL)
-assert.notEqual(tileAt(MapId.JERUSALEM, 36, height - 1), Tile.WALL)
-assert.equal(tileAt(MapId.JUDEA, 2, -1), Tile.WALL)
+assert.equal(new Set([...tiles].filter((tile) => isDoor(map, tile))).size, Object.keys(puzzles).length)
+for (const key of Object.keys(readings)) assert(tiles.includes(key), `reading ${key} on the map`)
+for (const { ref } of Object.values(readings)) assert(VERSES[ref], `${ref} in the verse file`)
 
 const press = (state, ...keys) => keys.reduce((s, key) => update(s, key), state)
 const finishDialogue = (state) => (state.mode === Mode.DIALOGUE ? finishDialogue(update(state, Key.CONFIRM)) : state)
 const walkTo = (state, x) => press(state, ...Array(Math.max(0, x - state.player.x)).fill(Key.RIGHT))
+const positionOf = (tile) => {
+  const y = rows.findIndex((row) => row.includes(tile))
+  return { x: rows[y].indexOf(tile), y }
+}
+// Every stone has open ground below it.
+const besideStone = (state, key) => ({ ...state, player: { x: positionOf(key).x, y: positionOf(key).y + 1 } })
+const lane = positionOf('@').y
+const visitLandmark = (state, letter) => update(walkTo(state, positionOf(letter).x), Key.CONFIRM)
 
 function pickAt(state, wanted) {
   const visible = visibleItems(state.puzzle)
   return press(state, ...Array(visible.indexOf(wanted(visible))).fill(Key.DOWN), Key.CONFIRM)
 }
-const correctPick = (state) => pickAt(state, () => expectedIndex(puzzleOf(state), state.puzzle.picked))
-const wrongPick = (state) =>
-  pickAt(state, (visible) => visible.find((item) => item !== expectedIndex(puzzleOf(state), state.puzzle.picked)))
+const correctPick = (state) => pickAt(state, (visible) => visible.find((item) => currentStep(puzzleOf(state), state.puzzle.picked).answers.includes(item)))
+const wrongPick = (state) => pickAt(state, (visible) => visible.find((item) => !currentStep(puzzleOf(state), state.puzzle.picked).answers.includes(item)))
+const typeAnswer = (state) =>
+  update(typeText(state, puzzleOf(state).keywords[currentStep(puzzleOf(state), state.puzzle.picked).answers[0]][0]), Key.CONFIRM)
 const settle = (state) =>
   state.mode === Mode.DIALOGUE ? settle(update(state, Key.CONFIRM))
-  : state.mode === Mode.PUZZLE ? settle(correctPick(state))
+  : state.mode === Mode.PUZZLE ? settle(puzzleOf(state).keywords ? typeAnswer(state) : correctPick(state))
   : state
+// Step beside a stone, read it (filling its blank if it has one), and come back.
+const readStone = (state, key) => ({ ...settle(update(besideStone(state, key), Key.CONFIRM)), player: state.player })
 
-// walking off the last row of the looping map continues on the first
-const seam = { ...finishDialogue(initialState()), player: { x: 36, y: height - 1 } }
-assert.equal(update(seam, Key.DOWN).player.y, height)
+const start = finishDialogue(initialState())
+assert.equal(start.map, map)
+assert.equal(pagesOf(start), 0)
+assert.deepEqual(start.bible, [])
 
-// city houses are solid
-const street = { ...finishDialogue(initialState()), player: { x: 75, y: 12 } }
-assert.deepEqual(update(street, Key.UP).player, street.player)
-
-// villagers fill the map: all block the way, only the talkative ones answer
-const tilesOf = (map, tile) => rowsOf(map).flatMap((row, y) => [...row].flatMap((char, x) => (char === tile ? [{ x, y }] : [])))
-const standBelow = ({ x, y }) => ({ ...finishDialogue(initialState()), player: { x, y: y + 1 } })
-const silent = standBelow(tilesOf(MapId.JERUSALEM, Tile.VILLAGER)[0])
-assert.deepEqual(update(silent, Key.UP).player, silent.player)
-assert.equal(update(silent, Key.CONFIRM).mode, Mode.MAP)
-const chatty = standBelow(tilesOf(MapId.JERUSALEM, Tile.CHATTER)[0])
-assert.deepEqual(update(chatty, Key.UP).player, chatty.player)
-assert.equal(update(chatty, Key.CONFIRM).mode, Mode.DIALOGUE)
-
-// drifting a little off the lane does not trap the player beside a character, and nothing pulls them sideways
-const drifted = { ...finishDialogue(initialState()), player: { x: 22.2, y: 11.7 } }
-const passing = Array(9).fill(Key.RIGHT).reduce((s, key) => update(s, key, 0.1), drifted)
-assert(passing.player.x > 22.9, 'walks on past the character')
-assert.equal(passing.player.y, drifted.player.y)
-
-// closed door blocks and explains
-let state = finishDialogue(initialState())
-const firstDoorX = rowsOf(MapId.JERUSALEM).find((row) => row.includes('@')).search(/[A-Z]/)
-state = walkTo(state, firstDoorX - 1)
-const bumped = update(state, Key.RIGHT)
-assert.equal(bumped.player.x, firstDoorX - 1)
-assert.equal(bumped.mode, Mode.DIALOGUE)
+// stones and landmarks are solid
+const belowStone = besideStone(start, '1')
+assert.deepEqual(update(belowStone, Key.UP).player, belowStone.player)
 
 // movement is continuous: any direction responds at once, by the distance given
-const free = finishDialogue(initialState())
-const nudged = update(update(free, Key.RIGHT, 0.2), Key.DOWN, 0.2)
-assert.deepEqual(nudged.player, { x: free.player.x + 0.2, y: free.player.y + 0.2 })
-assert.equal(update(state, Key.RIGHT, 0.4).mode, Mode.DIALOGUE, 'closed door blocks a partial step too')
+const nudged = update(update(start, Key.RIGHT, 0.2), Key.DOWN, 0.2)
+assert.deepEqual(nudged.player, { x: start.player.x + 0.2, y: start.player.y + 0.2 })
+
+// a closed river crossing blocks and points to the region's puzzle
+const firstCrossing = positionOf('A').x
+const bumped = update(walkTo(start, firstCrossing - 1), Key.RIGHT)
+assert.equal(bumped.player.x, firstCrossing - 1)
+assert.equal(bumped.mode, Mode.DIALOGUE)
+assert.deepEqual(bumped.dialogue.lines, puzzles.a.closedLines)
+
+// the pedestals wait for all seven day stones and say how many are missing
+const early = visitLandmark(readStone(start, '1'), 'a')
+assert.equal(early.mode, Mode.DIALOGUE)
+assert.deepEqual(early.dialogue.lines, puzzles.a.missingLines(6))
+assert.equal(finishDialogue(early).mode, Mode.MAP)
+
+// the bottom prompt knows what the player stands next to
+assert.equal(interactable(belowStone), '1')
+assert.equal(interactable(start), undefined)
+
+// reading a stone adds it to the notebook once
+const twice = readStone(readStone(start, '1'), '1')
+assert.deepEqual(twice.read, ['1'])
+
+// the tree puzzle needs God's command from the region before
+const command = { ...start, opened: ['A', 'B'], player: { x: positionOf('c').x - 3, y: lane } }
+assert.deepEqual(visitLandmark(command, 'c').dialogue.lines, puzzles.c.missingLines(1))
+
+// a day stone hides its verse behind a blank to fill from the Bible: a wrong word keeps the text to fix,
+// accents and case do not matter, and only the right word reads the stone into the notebook
+const blank = update(belowStone, Key.CONFIRM)
+assert.equal(blank.mode, Mode.PUZZLE)
+assert.match(puzzleOf(blank).prompt, /Gênesis 1:3-5/)
+const missed = update(typeText(blank, 'trevas'), Key.CONFIRM)
+assert.equal(missed.puzzle.wrong, true)
+assert.deepEqual(missed.read, [])
+assert.equal(update(missed, Key.ERASE).puzzle.typed, 'treva')
+const filled = update(typeText(blank, 'A LUZ'), Key.CONFIRM)
+assert.equal(filled.mode, Mode.DIALOGUE)
+assert.deepEqual(finishDialogue(filled).read, ['1'])
+assert.equal(update(typeText(update(besideStone(start, '2'), Key.CONFIRM), 'Céus'), Key.CONFIRM).mode, Mode.DIALOGUE)
+assert.equal(typeText(start, 'x'), start)
+
+// the seventh filled day stone lights the pedestals and opens the first crossing
+const sixDays = ['1', '2', '3', '4', '5', '6'].reduce(readStone, start)
+assert.deepEqual(sixDays.opened, [])
+assert.deepEqual(visitLandmark(sixDays, 'a').dialogue.lines, puzzles.a.missingLines(1))
+const days = readStone(sixDays, '7')
+assert.deepEqual(days.opened, ['A'])
 
 // wrong answer keeps progress and flags a hint
-let puzzleState = finishDialogue(update(finishDialogue(bumped), Key.CONFIRM))
-assert.equal(puzzleState.mode, Mode.PUZZLE)
-puzzleState = wrongPick(puzzleState)
-assert.equal(puzzleState.mode, Mode.PUZZLE)
-assert.equal(puzzleState.puzzle.wrong, true)
-assert.equal(puzzleState.puzzle.picked.length, 0)
+let puzzle = finishDialogue(visitLandmark({ ...days, player: { x: positionOf('b').x, y: lane } }, 'b'))
+assert.equal(puzzle.mode, Mode.PUZZLE)
+puzzle = correctPick(puzzle)
+puzzle = wrongPick(puzzle)
+assert.equal(puzzle.mode, Mode.PUZZLE)
+assert.equal(puzzle.puzzle.wrong, true)
+assert.equal(puzzle.puzzle.picked.length, 1)
 
-// full run: solve every puzzle of every map, cross each exit
-state = finishDialogue(initialState())
-for (const [index, map] of MAP_ORDER.entries()) {
-  assert.equal(state.map, map)
-  assert.equal(state.opened.length, 0)
-  const rows = rowsOf(map)
-  for (const letter of Object.keys(CHAPTERS[map].puzzles)) {
-    state = settle(update(walkTo(state, rows.find((row) => row.includes(letter)).indexOf(letter)), Key.CONFIRM))
-    assert.equal(state.mode, Mode.MAP)
-  }
-  assert.equal(state.opened.length, 3)
-  state = settle(walkTo(state, rows[0].length - 2))
-  assert.equal(state.mode, index === MAP_ORDER.length - 1 ? Mode.END : Mode.MAP)
+// the notebook opens inside a puzzle and closes back to it without losing progress
+const reading = update(puzzle, Key.NOTEBOOK)
+assert.equal(reading.mode, Mode.NOTEBOOK)
+assert.equal(update(reading, Key.DOWN).notebook.cursor, 1)
+const back = update(update(reading, Key.DOWN), Key.NOTEBOOK)
+assert.equal(back.mode, Mode.PUZZLE)
+assert.deepEqual(back.puzzle, puzzle.puzzle)
+
+// full run: read every stone, solve every puzzle along the path, leave through the gate
+let state = Object.keys(readings).reduce(readStone, start)
+for (const [index, letter] of Object.keys(puzzles).entries()) {
+  state = settle(visitLandmark(state, letter))
+  assert.equal(state.mode, Mode.MAP)
+  assert.equal(state.opened.length, index + 1)
 }
+assert.equal(pagesOf(state), CHAPTERS[map].pages.length)
+assert.deepEqual(state.bible, ['Gênesis 1', 'Gênesis 2', 'Gênesis 3'])
+state = settle(walkTo(state, rows[lane].indexOf('>')))
+assert.equal(state.mode, Mode.END)
+assert(!isNpc(map, '>') && !isReading(map, '>'))
 console.log('ok')
