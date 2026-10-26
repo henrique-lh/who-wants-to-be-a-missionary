@@ -34,7 +34,7 @@ const touching = (mapId, { x, y }) =>
   [-HITBOX, HITBOX].flatMap((dy) => [-HITBOX, HITBOX].map((dx) => tileAt(mapId, Math.floor(x + 0.5 + dx), Math.floor(y + 0.5 + dy))))
 export const visibleItems = (puzzle) => puzzle.order.filter((item) => !puzzle.picked.includes(item))
 
-export const pagesOf = (state) => CHAPTERS[state.map].pages.filter((door) => state.opened.includes(door)).length
+export const shardsOf = (state) => CHAPTERS[state.map].shards.filter((door) => state.opened.includes(door)).length
 
 // ORDER and TYPE puzzles are one step per item, in sequence. A FIND puzzle lists its own steps.
 const stepsOf = (definition) => definition.steps ?? definition.items.map((_, index) => ({ answers: [index] }))
@@ -68,7 +68,7 @@ const missingOf = (state, { needs }) => needs.filter((need) => !state.read.inclu
 const say = (state, lines, then = { mode: Mode.MAP }) => ({ ...state, mode: Mode.DIALOGUE, dialogue: { lines, then } })
 
 export const initialState = () => say(
-  { map: MapId.EDEN, player: startOf(MapId.EDEN), opened: [], read: [], bible: [], puzzle: null, notebook: null },
+  { map: MapId.EDEN, player: startOf(MapId.EDEN), opened: [], read: [], gems: [], puzzle: null, notebook: null },
   CHAPTERS[MapId.EDEN].introLines,
 )
 
@@ -133,6 +133,7 @@ function visit(state, letter) {
   if (state.opened.includes(letter.toUpperCase())) return say(state, DONE_LINES)
   const missing = missingOf(state, puzzle)
   if (missing.length) return say(state, puzzle.missingLines(missing.length))
+  if (!puzzle.type) return say({ ...state, opened: [...state.opened, letter.toUpperCase()] }, puzzle.solvedLines)
   return say(state, puzzle.introLines, { mode: Mode.PUZZLE, puzzle: opening(letter, puzzle) })
 }
 
@@ -162,17 +163,11 @@ function choose(state, key) {
     : { ...state, puzzle: { ...puzzle, picked: result.picked, cursor: 0, wrong: !result.correct, typed: result.correct ? '' : puzzle.typed } }
 }
 
-// A solved stone is read, a solved landmark opens its door. Then landmarks without a puzzle of their own open once their needs are met.
+// A solved stone is read, a solved landmark opens its door and may give a gem.
 function solve(state, definition) {
   const { id } = state.puzzle
   const done = isReading(state.map, id)
     ? { ...state, read: [...state.read, id] }
-    : { ...state, opened: [...state.opened, id.toUpperCase()], bible: [...state.bible, ...(definition.bible ?? [])] }
-  const unlocked = Object.entries(puzzlesOf(state.map)).filter(
-    ([letter, landmark]) => !landmark.type && !done.opened.includes(letter.toUpperCase()) && !missingOf(done, landmark).length,
-  )
-  return say(
-    { ...done, puzzle: null, opened: [...done.opened, ...unlocked.map(([letter]) => letter.toUpperCase())] },
-    [...definition.solvedLines, ...unlocked.flatMap(([, landmark]) => landmark.solvedLines)],
-  )
+    : { ...state, opened: [...state.opened, id.toUpperCase()], gems: definition.gem ? [...state.gems, definition.gem] : state.gems }
+  return say({ ...done, puzzle: null }, definition.solvedLines)
 }

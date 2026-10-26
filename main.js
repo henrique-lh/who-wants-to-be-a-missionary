@@ -1,6 +1,6 @@
 import { CHAPTERS, END_LINES, PuzzleType, quote } from './bible.js'
 import {
-  Key, Mode, Tile, currentStep, initialState, interactable, isDoor, isNpc, isReading, isTyping, pagesOf, puzzleOf, puzzlesOf, readingsOf, rowsOf, tileAt, typeText,
+  Key, Mode, Tile, currentStep, initialState, interactable, isDoor, isNpc, isReading, isTyping, puzzleOf, puzzlesOf, readingsOf, shardsOf, rowsOf, tileAt, typeText,
   update, visibleItems,
 } from './game.js'
 
@@ -67,15 +67,22 @@ const CRACKS = [
   '................', '..b.............', '...b.......b....', '...bb.....b.....', '.....b...b......', '......bbb.......',
   '......b.........', '.....b..........', '....b.......b...', '............b...', '...........b.b..', '..........b...b.',
 ]
-// A lit mark on a day stone that was filled in, and on the pedestals once all seven are.
+// A lit mark on a day stone that was filled in.
 const LIT = [...Array(8).fill(''), '........yy......', '.......ywwy.....', '.......ywwy.....', '........yy......']
 // Planks run across the river, so a run of bridge tiles repeats seamlessly.
 const BRIDGE = [
   'oooooooooooooooo', 'bbbbbbbbbbbbbbbb', 'oooooooooooooooo', ...Array(9).fill('pppopppopppopppo'), 'bbbobbbobbbobbbo',
   'oooooooooooooooo', 'bbbbbbbbbbbbbbbb', 'oooooooooooooooo',
 ]
-// A bridge lays its planks one pixel column at a time, west to east, the first time it comes into view.
+// One color per gem, in the order of the pedestals' needs. Placed gems fly one by one into a ring of sockets.
+const GEM_COLORS = ['#fff59d', '#81d4fa', '#9ccc65', '#ffb74d', '#4db6ac', '#e57373', '#ce93d8']
+const GEM_RING = 6
+const GEM_STAGGER_MS = 160
+const GEM_FLIGHT_MS = 450
+// A bridge lays its planks one pixel column at a time, west to east, the first time it comes into view,
+// after any gems have landed.
 const BUILD_MS_PER_COLUMN = 30
+const BRIDGE_DELAY_MS = GEM_STAGGER_MS * 6 + GEM_FLIGHT_MS + 200
 const CROSS = [[0, -1], [1, 0], [0, 1], [-1, 0]]
 const FACING_COLUMN = { [Key.DOWN]: 0, [Key.UP]: 1, [Key.LEFT]: 2, [Key.RIGHT]: 2 }
 const WALK_FRAMES = [0, 1, 0, 2]
@@ -144,9 +151,13 @@ function tileCells(map, tile, x, y, opened) {
   return ground
 }
 
-const isLit = ({ map, read, opened }, tile) =>
-  (isReading(map, tile) && Boolean(readingsOf(map)[tile].puzzle) && read.includes(tile))
-  || (isNpc(map, tile) && !puzzlesOf(map)[tile].type && opened.includes(tile.toUpperCase()))
+const isLit = ({ map, read }, tile) => isReading(map, tile) && Boolean(readingsOf(map)[tile].puzzle) && read.includes(tile)
+// The landmark without a puzzle of its own: the pedestals that take the day gems.
+const altarOf = (map) => Object.entries(puzzlesOf(map)).find(([, landmark]) => !landmark.type)
+const positionOf = (map, tile) => {
+  const y = rowsOf(map).findIndex((row) => row.includes(tile))
+  return { x: rowsOf(map)[y].indexOf(tile), y }
+}
 
 function drawPixels(pattern, left, top, width = Infinity) {
   pattern.forEach((line, row) => [...line].forEach((pixel, column) => {
@@ -204,12 +215,57 @@ function drawPlayer(player, x, y) {
 }
 
 const runIndex = (map, tile, x, y) => (tileAt(map, x - 1, y) === tile ? 1 + runIndex(map, tile, x - 1, y) : 0)
-let builtAt = {}
+let seenAt = {}
+
+// Time since an opened tile was first drawn, so its animation plays when the player can see it.
+function sinceSeen(tile) {
+  const now = performance.now()
+  if (!seenAt[tile]) seenAt = { ...seenAt, [tile]: now }
+  return now - seenAt[tile]
+}
 
 function drawBridge(map, tile, x, y, left, top) {
-  const now = performance.now()
-  if (!builtAt[tile]) builtAt = { ...builtAt, [tile]: now }
-  drawPixels(BRIDGE, left, top, (now - builtAt[tile]) / BUILD_MS_PER_COLUMN - runIndex(map, tile, x, y) * TILE)
+  drawPixels(BRIDGE, left, top, (sinceSeen(tile) - BRIDGE_DELAY_MS) / BUILD_MS_PER_COLUMN - runIndex(map, tile, x, y) * TILE)
+}
+
+function drawSocket(x, y) {
+  ctx.fillStyle = PIXEL_COLORS.o
+  ctx.fillRect(x - 1, y, 3, 1)
+  ctx.fillRect(x, y - 1, 1, 3)
+}
+
+function drawGem(color, x, y) {
+  ctx.fillStyle = PIXEL_COLORS.o
+  ctx.fillRect(x - 2, y - 1, 5, 3)
+  ctx.fillRect(x - 1, y - 2, 3, 5)
+  ctx.fillStyle = color
+  ctx.fillRect(x - 1, y, 3, 1)
+  ctx.fillRect(x, y - 1, 1, 3)
+  ctx.fillStyle = PIXEL_COLORS.w
+  ctx.fillRect(x, y - 1, 1, 1)
+}
+
+// The pedestals show a ring of empty sockets until the gems are placed; then each gem flies in from the player.
+function drawAltar({ map, opened }, camX, camY, from) {
+  const [letter, { needs }] = altarOf(map)
+  const { x, y } = positionOf(map, letter)
+  const centre = { x: snap((x - camX) * TILE) + 8, y: snap((y - camY) * TILE) + 8 }
+  const since = opened.includes(letter.toUpperCase()) ? sinceSeen(letter) : -Infinity
+  needs.forEach((_, index) => {
+    const angle = (index / needs.length) * 2 * Math.PI - Math.PI / 2
+    const slot = { x: centre.x + Math.round(Math.cos(angle) * GEM_RING), y: centre.y + Math.round(Math.sin(angle) * GEM_RING) }
+    const flight = clamp((since - index * GEM_STAGGER_MS) / GEM_FLIGHT_MS, 0, 1)
+    if (!flight) return drawSocket(slot.x, slot.y)
+    drawGem(GEM_COLORS[index], Math.round(from.x + (slot.x - from.x) * flight), Math.round(from.y + (slot.y - from.y) * flight))
+  })
+}
+
+// While the pedestals wait, the gems already earned show at the top left.
+function drawCarried({ map, read, opened }) {
+  const [letter, { needs }] = altarOf(map)
+  if (opened.includes(letter.toUpperCase()) || !needs.some((need) => read.includes(need))) return
+  drawBox(4, 4, needs.length * 7 + 5, 11)
+  needs.forEach((need, index) => (read.includes(need) ? drawGem(GEM_COLORS[index], 9 + index * 7, 9) : drawSocket(9 + index * 7, 9)))
 }
 
 function drawMap(state) {
@@ -234,7 +290,10 @@ function drawMap(state) {
       if (isDoor(map, tile) && !inRiver(map, mapX, mapY) && !opened.includes(tile)) drawPixels(FLAMING_SWORD, left, top)
     }
   }
-  drawPlayer(player, snap((player.x - camX) * TILE), snap((player.y - camY) * TILE))
+  const playerLeft = snap((player.x - camX) * TILE)
+  const playerTop = snap((player.y - camY) * TILE)
+  drawPlayer(player, playerLeft, playerTop)
+  drawAltar(state, camX, camY, { x: playerLeft + 8, y: playerTop + 6 })
 }
 
 // A small box at the right edge names the buttons for what the player can do now.
@@ -287,17 +346,17 @@ function drawChoices(definition, puzzle, afterPrompt) {
 const NOTEBOOK_ROWS = 5
 
 function drawNotebook(state) {
-  const { map, read, bible, notebook } = state
+  const { map, read, gems, notebook } = state
   const readings = readingsOf(map)
   drawBox(4, 4, 232, 152)
   const afterTitle = drawText('Caderno (C fecha)', 10, 10, 220)
-  const afterPages = drawText(`Folhas rasgadas: ${pagesOf(state)} de ${CHAPTERS[map].pages.length}`, 10, afterTitle + 2, 220)
-  const afterBible = drawText(`Bíblia: ${bible.length ? bible.join(', ') : 'nenhuma página ainda'}`, 10, afterPages, 220)
-  if (!read.length) return drawText('Caderno vazio.', 10, afterBible + 6, 220)
+  const afterShards = drawText(`Fragmentos: ${shardsOf(state)} de ${CHAPTERS[map].shards.length}`, 10, afterTitle + 2, 220)
+  const afterGems = drawText(`Gemas: ${gems.length ? gems.join(', ') : 'nenhuma ainda'}`, 10, afterShards, 220)
+  if (!read.length) return drawText('Caderno vazio.', 10, afterGems + 6, 220)
   const first = clamp(notebook.cursor - 2, 0, Math.max(0, read.length - NOTEBOOK_ROWS))
   const afterList = read.slice(first, first + NOTEBOOK_ROWS).reduce(
     (top, key, row) => drawText(`${first + row === notebook.cursor ? '>' : ' '} ${readings[key].title}`, 10, top, 220),
-    afterBible + 6,
+    afterGems + 6,
   )
   drawText(quote(readings[read[notebook.cursor]].ref), 10, afterList + 6, 220)
 }
@@ -311,6 +370,7 @@ function draw(state) {
     return
   }
   drawMap(state)
+  if (state.mode === Mode.MAP || state.mode === Mode.DIALOGUE) drawCarried(state)
   if (state.mode === Mode.MAP) drawPrompt(state)
   if (state.mode === Mode.PUZZLE) drawPuzzle(state)
   if (state.mode === Mode.NOTEBOOK) drawNotebook(state)

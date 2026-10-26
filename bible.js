@@ -28,31 +28,31 @@ export const VERSES = {
 export const quote = (ref) => `${ref}: "${VERSES[ref]}"`
 
 export const DONE_LINES = ['Não há mais nada aqui.']
-export const END_LINES = ['Continua...', 'Bíblia: Gênesis 1 a 3.', 'Próximo mapa: ainda não construído.']
+export const END_LINES = ['Continua...', 'Gema recuperada: Gênesis.', 'Próximo mapa: ainda não construído.']
 
-const FOUND_PAGE = 'Você encontrou uma folha rasgada. Uma ponte se ergueu sobre o rio.'
+const FOUND_SHARD = 'Você encontrou um fragmento de uma gema maior. Uma ponte se ergueu sobre o rio.'
 const DEEP_RIVER = 'O rio é fundo demais para atravessar aqui.'
-// Doors of the region puzzles. Each one opens with a torn page, and the gate needs all of them.
-const TORN_PAGES = ['A', 'B', 'C', 'D']
+// Doors of the region puzzles. Each one opens with a shard of the Genesis gem, and the gate needs all of them.
+const SHARDS = ['A', 'B', 'C', 'D']
 
-// A day stone hides its verse behind a blank. The player looks the passage up in a Bible and types the missing word;
-// then the stone lights up and its verse goes into the notebook.
-const dayStone = (day, ref, passage, sentence, answer, keywords) => ({
+// A day stone asks what happened on its day, with a hint and no passage named. The right word lights the stone,
+// gives the player that day's gem and puts the verse in the notebook.
+const dayStone = (day, ref, hint, answer, keywords) => ({
   title: `Pedra do ${day} dia`,
   ref,
   puzzle: {
     type: PuzzleType.TYPE,
-    prompt: `${passage}. ${sentence}`,
+    prompt: `${hint} O que Deus fez neste dia?`,
     slots: ['Resposta'],
     items: [answer],
     keywords: [keywords],
-    solvedLines: ['A pedra se acendeu.', quote(ref)],
+    solvedLines: ['A pedra se acendeu e deixou uma gema na sua mão.', quote(ref)],
   },
 })
 
 // Landmarks give puzzles, keyed by their lowercase letter; the uppercase letter is the door they open.
 // Readings are stones the player reads into the notebook. A puzzle only starts once its `needs` are
-// read (reading keys) or opened (door letters). A landmark without a puzzle type opens its door as soon as its needs are met. ORDER items are listed in the correct order and shuffled
+// read (reading keys) or opened (door letters). A landmark without a puzzle type opens its door when visited with its needs met. ORDER items are listed in the correct order and shuffled
 // on screen. FIND steps list the items to pick, step by step, in any order within a step. TYPE items are filled in order by
 // typing one of the item's keywords (lowercase, no accents); the slot shows the item once it is right.
 // Event labels are paraphrases, not quotes.
@@ -60,29 +60,33 @@ export const CHAPTERS = {
   [MapId.EDEN]: {
     introLines: [
       'Num país onde a fé é proibida, as Bíblias são queimadas e os cristãos se reúnem escondidos.',
-      'Um irmão idoso deixou com você uma Bíblia vazia. Restaram a capa e a costura. Todas as folhas foram arrancadas.',
-      'Você decidiu reconstruí-la, folha por folha, para que a palavra volte a ser anunciada.',
+      'Um irmão idoso deixou com você a capa de uma Bíblia. As folhas foram queimadas. Na capa restaram engastes vazios, à espera de gemas.',
+      'Cada gema guarda uma parte da história. Juntas, elas lembram a palavra inteira.',
       'A primeira parte começa num jardim.',
       quote('Gênesis 2:8'),
       'Setas: andar. Z: ler e confirmar. X: voltar. C: caderno.',
     ],
     exitLines: ['Você deixou o jardim pelo oriente.'],
-    pages: TORN_PAGES,
+    shards: SHARDS,
     readings: {
-      1: dayStone('primeiro', 'Gênesis 1:3', 'Gênesis 1:3-5', 'No primeiro dia, Deus disse: Haja ___.', 'Luz', ['luz']),
-      2: dayStone('segundo', 'Gênesis 1:7', 'Gênesis 1:6-8', 'No segundo dia, Deus separou as águas e chamou a separação de ___.', 'Céus', [
+      1: dayStone('primeiro', 'Gênesis 1:3', 'Primeiro dia. Trevas cobriam o abismo, até a primeira palavra.', 'Luz', ['luz']),
+      2: dayStone('segundo', 'Gênesis 1:7', 'Segundo dia. Águas em cima, águas embaixo.', 'Céus', [
         'ceus', 'ceu', 'firmamento', 'expansao',
       ]),
-      3: dayStone('terceiro', 'Gênesis 1:9', 'Gênesis 1:9-13', 'No terceiro dia, apareceu a porção seca, que Deus chamou de ___.', 'Terra', ['terra']),
-      4: dayStone('quarto', 'Gênesis 1:16', 'Gênesis 1:14-19', 'No quarto dia, Deus fez o sol, a lua e as ___.', 'Estrelas', ['estrelas', 'estrela']),
-      5: dayStone('quinto', 'Gênesis 1:21', 'Gênesis 1:20-23', 'No quinto dia, as águas se encheram de seres vivos, e o céu, de ___.', 'Aves', [
-        'aves', 'ave', 'passaros', 'passaro',
+      3: dayStone('terceiro', 'Gênesis 1:9', 'Terceiro dia. As águas se ajuntaram num só lugar.', 'Terra', [
+        'terra', 'seca', 'mares', 'mar', 'plantas', 'erva', 'ervas', 'arvores',
       ]),
-      6: dayStone('sexto', 'Gênesis 1:27', 'Gênesis 1:24-31', 'No sexto dia, Deus fez os animais da terra e criou o ___ à sua imagem.', 'Homem', [
-        'homem', 'humano', 'humanidade', 'adao',
+      4: dayStone('quarto', 'Gênesis 1:16', 'Quarto dia. Sinais para as estações, os dias e os anos.', 'Luminares', [
+        'luminares', 'luminar', 'sol', 'lua', 'estrelas', 'estrela',
       ]),
-      7: dayStone('sétimo', 'Gênesis 2:2', 'Gênesis 2:1-3', 'No sétimo dia, Deus acabou a sua obra e ___.', 'Descansou', [
-        'descansou', 'descanso', 'repousou', 'cessou',
+      5: dayStone('quinto', 'Gênesis 1:21', 'Quinto dia. Uns nadam, outros voam.', 'Peixes e aves', [
+        'peixes', 'peixe', 'aves', 'ave', 'passaros', 'passaro', 'baleias',
+      ]),
+      6: dayStone('sexto', 'Gênesis 1:27', 'Sexto dia. Feito do pó, à imagem de quem o fez.', 'Homem', [
+        'homem', 'humano', 'humanidade', 'adao', 'mulher', 'animais',
+      ]),
+      7: dayStone('sétimo', 'Gênesis 2:2', 'Sétimo dia. A obra estava acabada.', 'Descanso', [
+        'descansou', 'descanso', 'repousou', 'repouso', 'cessou', 'nada',
       ]),
       O: { title: 'A ordem de Deus', ref: 'Gênesis 2:16-17' },
       S: { title: 'O que foi dito à serpente', ref: 'Gênesis 3:14' },
@@ -92,9 +96,12 @@ export const CHAPTERS = {
     puzzles: {
       a: {
         needs: ['1', '2', '3', '4', '5', '6', '7'],
-        missingLines: (count) => [`Sete pedestais formam um círculo. ${count} deles ainda estão apagados.`],
+        missingLines: (count) => [
+          'Sete pedestais formam um círculo. Na base, uma inscrição: "No princípio..."',
+          `Cada pedestal espera a gema de um dia. Ainda faltam ${count}.`,
+        ],
         closedLines: [DEEP_RIVER],
-        solvedLines: ['Os sete pedestais se acenderam.', quote('Gênesis 1:31'), FOUND_PAGE],
+        solvedLines: ['As sete gemas encontraram seus lugares.', quote('Gênesis 1:31'), FOUND_SHARD],
       },
       b: {
         type: PuzzleType.ORDER,
@@ -110,7 +117,7 @@ export const CHAPTERS = {
           'Fez cair um sono pesado sobre o homem.',
           'Da costela, formou a mulher.',
         ],
-        solvedLines: [quote('Gênesis 2:23'), FOUND_PAGE],
+        solvedLines: [quote('Gênesis 2:23'), FOUND_SHARD],
       },
       c: {
         type: PuzzleType.FIND,
@@ -128,7 +135,7 @@ export const CHAPTERS = {
           'Serpente: "no dia em que dele comerdes"',
         ],
         steps: [{ label: 'Marque cada trecho que mudou.', answers: [0, 1, 3, 4] }],
-        solvedLines: ['Você encontrou cada mudança.', quote('Gênesis 3:7'), FOUND_PAGE],
+        solvedLines: ['Você encontrou cada mudança.', quote('Gênesis 3:7'), FOUND_SHARD],
       },
       d: {
         type: PuzzleType.FIND,
@@ -150,14 +157,14 @@ export const CHAPTERS = {
           { label: 'O que foi dito à mulher?', answers: [2, 3] },
           { label: 'O que foi dito ao homem?', answers: [4, 5] },
         ],
-        solvedLines: [quote('Gênesis 3:23'), FOUND_PAGE],
+        solvedLines: [quote('Gênesis 3:23'), FOUND_SHARD],
       },
       e: {
         type: PuzzleType.ORDER,
-        needs: TORN_PAGES,
+        needs: SHARDS,
         missingLines: () => ['Os querubins guardam o caminho.'],
         closedLines: ['Uma espada inflamada guarda a passagem.'],
-        prompt: 'Junte as quatro folhas na ordem do relato.',
+        prompt: 'Cada fragmento tem uma frase gravada. Encaixe-os na ordem do relato.',
         introLines: [quote('Gênesis 3:24')],
         items: [
           '"No princípio, criou Deus os céus e a terra..."',
@@ -165,9 +172,9 @@ export const CHAPTERS = {
           '"Ora, a serpente era mais astuta que todas as alimárias do campo..."',
           '"E ouviram a voz do SENHOR Deus, que passeava no jardim..."',
         ],
-        bible: ['Gênesis 1', 'Gênesis 2', 'Gênesis 3'],
+        gem: 'Gênesis',
         solvedLines: [
-          'As quatro folhas se encaixaram. Gênesis 1 a 3 voltou para a Bíblia.',
+          'Os quatro fragmentos se uniram na gema do Gênesis. Ela brilha num engaste da capa.',
           quote('Gênesis 3:21'),
           quote('Gênesis 3:15'),
           'O caminho para o oriente está aberto.',

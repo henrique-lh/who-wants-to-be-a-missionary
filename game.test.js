@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { CHAPTERS, MapId, VERSES } from './bible.js'
-import { Key, Mode, currentStep, initialState, interactable, isDoor, isNpc, isReading, pagesOf, puzzleOf, rowsOf, typeText, update, visibleItems } from './game.js'
+import { Key, Mode, currentStep, initialState, interactable, isDoor, isNpc, isReading, shardsOf, puzzleOf, rowsOf, typeText, update, visibleItems } from './game.js'
 
 const map = MapId.EDEN
 const rows = rowsOf(map)
@@ -44,8 +44,8 @@ const readStone = (state, key) => ({ ...settle(update(besideStone(state, key), K
 
 const start = finishDialogue(initialState())
 assert.equal(start.map, map)
-assert.equal(pagesOf(start), 0)
-assert.deepEqual(start.bible, [])
+assert.equal(shardsOf(start), 0)
+assert.deepEqual(start.gems, [])
 
 // stones and landmarks are solid
 const belowStone = besideStone(start, '1')
@@ -84,7 +84,7 @@ assert.deepEqual(visitLandmark(command, 'c').dialogue.lines, puzzles.c.missingLi
 // accents and case do not matter, and only the right word reads the stone into the notebook
 const blank = update(belowStone, Key.CONFIRM)
 assert.equal(blank.mode, Mode.PUZZLE)
-assert.match(puzzleOf(blank).prompt, /Gênesis 1:3-5/)
+assert.doesNotMatch(puzzleOf(blank).prompt, /Gênesis/)
 const missed = update(typeText(blank, 'trevas'), Key.CONFIRM)
 assert.equal(missed.puzzle.wrong, true)
 assert.deepEqual(missed.read, [])
@@ -95,12 +95,14 @@ assert.deepEqual(finishDialogue(filled).read, ['1'])
 assert.equal(update(typeText(update(besideStone(start, '2'), Key.CONFIRM), 'Céus'), Key.CONFIRM).mode, Mode.DIALOGUE)
 assert.equal(typeText(start, 'x'), start)
 
-// the seventh filled day stone lights the pedestals and opens the first crossing
+// each filled day stone gives a gem; the pedestals take all seven and open the first crossing
 const sixDays = ['1', '2', '3', '4', '5', '6'].reduce(readStone, start)
-assert.deepEqual(sixDays.opened, [])
 assert.deepEqual(visitLandmark(sixDays, 'a').dialogue.lines, puzzles.a.missingLines(1))
 const days = readStone(sixDays, '7')
-assert.deepEqual(days.opened, ['A'])
+assert.deepEqual(days.opened, [])
+const placed = visitLandmark(days, 'a')
+assert.deepEqual(placed.dialogue.lines, puzzles.a.solvedLines)
+assert.deepEqual(placed.opened, ['A'])
 
 // wrong answer keeps progress and flags a hint
 let puzzle = finishDialogue(visitLandmark({ ...days, player: { x: positionOf('b').x, y: lane } }, 'b'))
@@ -126,8 +128,8 @@ for (const [index, letter] of Object.keys(puzzles).entries()) {
   assert.equal(state.mode, Mode.MAP)
   assert.equal(state.opened.length, index + 1)
 }
-assert.equal(pagesOf(state), CHAPTERS[map].pages.length)
-assert.deepEqual(state.bible, ['Gênesis 1', 'Gênesis 2', 'Gênesis 3'])
+assert.equal(shardsOf(state), CHAPTERS[map].shards.length)
+assert.deepEqual(state.gems, ['Gênesis'])
 state = settle(walkTo(state, rows[lane].indexOf('>')))
 assert.equal(state.mode, Mode.END)
 assert(!isNpc(map, '>') && !isReading(map, '>'))
