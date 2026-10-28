@@ -39,12 +39,21 @@ const settle = (state) =>
   state.mode === Mode.DIALOGUE ? settle(update(state, Key.CONFIRM))
   : state.mode === Mode.PUZZLE ? settle(puzzleOf(state).keywords ? typeAnswer(state) : correctPick(state))
   : state
+// The first puzzle is the pedestals: the day stones only speak after the player examines them.
+const visitAltar = (state) => settle(visitLandmark(state, 'a'))
 // Step beside a stone, read it (filling its blank if it has one), and come back.
 const readStone = (state, key) => ({ ...settle(update(besideStone(state, key), Key.CONFIRM)), player: state.player })
 
 const start = finishDialogue(initialState())
 assert.equal(start.map, map)
 assert.equal(shardsOf(start), 0)
+
+// a day stone is silent until the player examines the pedestal altar: not even Z is enabled
+assert.equal(interactable(besideStone(start, '1')), undefined)
+// after examining the pedestal, the stone answers Z
+assert.equal(interactable(besideStone(visitAltar(start), '1')), '1')
+const opened = update(besideStone(visitAltar(start), '1'), Key.CONFIRM)
+assert.equal(opened.mode, Mode.PUZZLE)
 assert.deepEqual(start.gems, [])
 
 // stones and landmarks are solid
@@ -63,17 +72,17 @@ assert.equal(bumped.mode, Mode.DIALOGUE)
 assert.deepEqual(bumped.dialogue.lines, puzzles.a.closedLines)
 
 // the pedestals wait for all seven day stones and say how many are missing
-const early = visitLandmark(readStone(start, '1'), 'a')
+const early = visitLandmark(readStone(visitAltar(start), '1'), 'a')
 assert.equal(early.mode, Mode.DIALOGUE)
 assert.deepEqual(early.dialogue.lines, puzzles.a.missingLines(6))
 assert.equal(finishDialogue(early).mode, Mode.MAP)
 
 // the bottom prompt knows what the player stands next to
-assert.equal(interactable(belowStone), '1')
+assert.equal(interactable(besideStone(visitAltar(start), '1')), '1')
 assert.equal(interactable(start), undefined)
 
 // reading a stone adds it to the notebook once
-const twice = readStone(readStone(start, '1'), '1')
+const twice = readStone(readStone(visitAltar(start), '1'), '1')
 assert.deepEqual(twice.read, ['1'])
 
 // the tree puzzle needs God's command from the region before
@@ -82,7 +91,7 @@ assert.deepEqual(visitLandmark(command, 'c').dialogue.lines, puzzles.c.missingLi
 
 // a day stone hides its verse behind a blank to fill from the Bible: a wrong word keeps the text to fix,
 // accents and case do not matter, and only the right word reads the stone into the notebook
-const blank = update(belowStone, Key.CONFIRM)
+const blank = update(besideStone(visitAltar(start), '1'), Key.CONFIRM)
 assert.equal(blank.mode, Mode.PUZZLE)
 assert.doesNotMatch(puzzleOf(blank).prompt, /Gênesis/)
 const missed = update(typeText(blank, 'trevas'), Key.CONFIRM)
@@ -92,11 +101,11 @@ assert.equal(update(missed, Key.ERASE).puzzle.typed, 'treva')
 const filled = update(typeText(blank, 'A LUZ'), Key.CONFIRM)
 assert.equal(filled.mode, Mode.DIALOGUE)
 assert.deepEqual(finishDialogue(filled).read, ['1'])
-assert.equal(update(typeText(update(besideStone(start, '2'), Key.CONFIRM), 'Céus'), Key.CONFIRM).mode, Mode.DIALOGUE)
+assert.equal(update(typeText(update(besideStone(visitAltar(start), '2'), Key.CONFIRM), 'Céus'), Key.CONFIRM).mode, Mode.DIALOGUE)
 assert.equal(typeText(start, 'x'), start)
 
 // each filled day stone gives a gem; the pedestals take all seven and open the first crossing
-const sixDays = ['1', '2', '3', '4', '5', '6'].reduce(readStone, start)
+const sixDays = ['1', '2', '3', '4', '5', '6'].reduce(readStone, visitAltar(start))
 assert.deepEqual(visitLandmark(sixDays, 'a').dialogue.lines, puzzles.a.missingLines(1))
 const days = readStone(sixDays, '7')
 assert.deepEqual(days.opened, [])
@@ -122,7 +131,7 @@ assert.equal(back.mode, Mode.PUZZLE)
 assert.deepEqual(back.puzzle, puzzle.puzzle)
 
 // full run: read every stone, solve every puzzle along the path, leave through the gate
-let state = Object.keys(readings).reduce(readStone, start)
+let state = Object.keys(readings).reduce(readStone, visitAltar(start))
 for (const [index, letter] of Object.keys(puzzles).entries()) {
   state = settle(visitLandmark(state, letter))
   assert.equal(state.mode, Mode.MAP)

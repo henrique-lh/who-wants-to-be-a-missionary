@@ -68,7 +68,7 @@ const missingOf = (state, { needs }) => needs.filter((need) => !state.read.inclu
 const say = (state, lines, then = { mode: Mode.MAP }) => ({ ...state, mode: Mode.DIALOGUE, dialogue: { lines, then } })
 
 export const initialState = () => say(
-  { map: MapId.EDEN, player: startOf(MapId.EDEN), opened: [], read: [], gems: [], puzzle: null, notebook: null },
+  { map: MapId.EDEN, player: startOf(MapId.EDEN), opened: [], read: [], gems: [], puzzle: null, notebook: null, visited: [] },
   CHAPTERS[MapId.EDEN].introLines,
 )
 
@@ -105,11 +105,18 @@ function move(state, key, distance) {
 }
 
 // The landmark or stone next to the player, landmarks first.
+// Day stones (readings with a puzzle) only answer once the player has examined the altar that holds the gems.
 export function interactable(state) {
   const x = Math.round(state.player.x)
   const y = Math.round(state.player.y)
   const around = Object.values(STEP).map(([dx, dy]) => tileAt(state.map, x + dx, y + dy))
-  return around.find((tile) => isNpc(state.map, tile)) ?? around.find((tile) => isReading(state.map, tile))
+  const npc = around.find((tile) => isNpc(state.map, tile))
+  if (npc) return npc
+  const altar = Object.entries(puzzlesOf(state.map)).find(([, landmark]) => !landmark.type)?.[0]
+  return around.find((tile) => {
+    const reading = readingsOf(state.map)[tile]
+    return isReading(state.map, tile) && (!reading.puzzle || state.visited.includes(altar))
+  })
 }
 
 function talk(state) {
@@ -122,6 +129,10 @@ export const linesOf = ({ title, ref }) => [`${title}.`, quote(ref)]
 
 function read(state, key) {
   const reading = readingsOf(state.map)[key]
+  const altar = Object.entries(puzzlesOf(state.map)).find(([, landmark]) => !landmark.type)?.[0]
+  if (reading.puzzle && altar && !state.visited.includes(altar)) {
+    return say(state, ['Você ainda não examinou os pedestais. Fale com a pedra que guarda as gemas primeiro.'])
+  }
   if (state.read.includes(key)) return say(state, linesOf(reading))
   return reading.puzzle
     ? { ...state, mode: Mode.PUZZLE, puzzle: opening(key, reading.puzzle) }
@@ -130,11 +141,13 @@ function read(state, key) {
 
 function visit(state, letter) {
   const puzzle = puzzlesOf(state.map)[letter]
-  if (state.opened.includes(letter.toUpperCase())) return say(state, DONE_LINES)
+  const visited = state.visited.includes(letter) ? state.visited : [...state.visited, letter]
+  const withVisited = (s) => ({ ...s, visited })
+  if (state.opened.includes(letter.toUpperCase())) return say(withVisited(state), DONE_LINES)
   const missing = missingOf(state, puzzle)
-  if (missing.length) return say(state, puzzle.missingLines(missing.length))
-  if (!puzzle.type) return say({ ...state, opened: [...state.opened, letter.toUpperCase()] }, puzzle.solvedLines)
-  return say(state, puzzle.introLines, { mode: Mode.PUZZLE, puzzle: opening(letter, puzzle) })
+  if (missing.length) return say(withVisited(state), puzzle.missingLines(missing.length))
+  if (!puzzle.type) return say(withVisited({ ...state, opened: [...state.opened, letter.toUpperCase()] }), puzzle.solvedLines)
+  return say(withVisited(state), puzzle.introLines, { mode: Mode.PUZZLE, puzzle: opening(letter, puzzle) })
 }
 
 function browse(state, key) {
