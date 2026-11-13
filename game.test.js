@@ -47,14 +47,12 @@ const readStone = (state, key) => ({ ...settle(update(besideStone(state, key), K
 const start = finishDialogue(initialState())
 assert.equal(start.map, map)
 assert.equal(shardsOf(start), 0)
-
-// a day stone is silent until the player examines the pedestal altar: not even Z is enabled
-assert.equal(interactable(besideStone(start, '1')), undefined)
-// after examining the pedestal, the stone answers Z
-assert.equal(interactable(besideStone(visitAltar(start), '1')), '1')
-const opened = update(besideStone(visitAltar(start), '1'), Key.CONFIRM)
-assert.equal(opened.mode, Mode.PUZZLE)
 assert.deepEqual(start.gems, [])
+
+// a day stone stays silent until the player examines the pedestals, then Z opens its blank
+assert.equal(interactable(besideStone(start, '1')), undefined)
+assert.equal(update(besideStone(start, '1'), Key.CONFIRM).mode, Mode.MAP)
+assert.equal(update(besideStone(visitAltar(start), '1'), Key.CONFIRM).mode, Mode.PUZZLE)
 
 // stones and landmarks are solid
 const belowStone = besideStone(start, '1')
